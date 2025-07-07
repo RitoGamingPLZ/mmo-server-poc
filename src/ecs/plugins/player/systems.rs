@@ -1,13 +1,15 @@
 use bevy::prelude::*;
+use crate::ecs::core::GameConfig;
 use crate::ecs::plugins::player::components::*;
 
 pub fn player_spawn_system(
     mut commands: Commands,
     mut spawn_events: EventReader<PlayerSpawnEvent>,
     mut player_registry: ResMut<PlayerRegistry>,
+    game_config: Res<GameConfig>,
 ) {
     for event in spawn_events.read() {
-        let entity = commands.spawn(PlayerBundle::new(event.player_id)).id();
+        let entity = commands.spawn(PlayerBundle::new(event.player_id, &game_config)).id();
         player_registry.register_player(event.player_id, entity);
         println!("Spawned player entity for player ID: {}", event.player_id);
     }

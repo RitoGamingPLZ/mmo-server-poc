@@ -1,7 +1,9 @@
 use bevy::prelude::*;
 use std::collections::HashMap;
-use crate::ecs::core::{Position, NetworkId};
-use crate::ecs::plugins::movement::components::Velocity;
+use rand::prelude::*;
+use crate::ecs::core::{Position, GameConfig};
+use crate::ecs::plugins::movement::components::{Velocity, DesiredVelocity, Friction};
+use crate::ecs::plugins::network::NetworkedObject;
 
 #[derive(Component, Debug, Clone, Copy)]
 pub struct Player {
@@ -14,23 +16,53 @@ pub struct Health {
     pub max: f32,
 }
 
+#[derive(Component, Debug, Clone, Copy)]
+pub struct CharacterProfile {
+    pub max_speed: f32,
+    pub acceleration: f32,
+    pub deceleration: f32,
+    pub max_health: f32,
+}
+
+impl Default for CharacterProfile {
+    fn default() -> Self {
+        Self {
+            max_speed: 100.0,
+            acceleration: 200.0,
+            deceleration: 300.0,
+            max_health: 100.0,
+        }
+    }
+}
+
 #[derive(Bundle)]
 pub struct PlayerBundle {
     pub player: Player,
     pub position: Position,
     pub velocity: Velocity,
+    pub desired_velocity: DesiredVelocity,
     pub health: Health,
-    pub network_id: NetworkId,
+    pub character_profile: CharacterProfile,
+    pub friction: Friction,
+    pub networked_object: NetworkedObject,
 }
 
 impl PlayerBundle {
-    pub fn new(player_id: u32) -> Self {
+    pub fn new(player_id: u32, game_config: &GameConfig) -> Self {
+        let profile = CharacterProfile::default();
+        let mut rng = rand::thread_rng();
+        let x = rng.gen_range(0.0..game_config.world_bounds.x);
+        let y = rng.gen_range(0.0..game_config.world_bounds.y);
+        
         Self {
             player: Player { id: player_id },
-            position: Position { x: 0.0, y: 0.0 },
+            position: Position { x, y },
             velocity: Velocity { x: 0.0, y: 0.0 },
-            health: Health { current: 100.0, max: 100.0 },
-            network_id: NetworkId { id: player_id },
+            desired_velocity: DesiredVelocity::default(),
+            health: Health { current: profile.max_health, max: profile.max_health },
+            character_profile: profile,
+            friction: Friction::default(),
+            networked_object: NetworkedObject::new_player(player_id),
         }
     }
 }

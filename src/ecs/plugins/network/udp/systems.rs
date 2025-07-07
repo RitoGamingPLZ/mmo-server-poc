@@ -18,10 +18,7 @@ pub fn handle_server_events(
                 let client_id_enum = ClientId::Udp(*client_id);
                 let player_id = generate_player_id(); // Use unified player ID generation
                 
-                let client_info = ClientInfo {
-                    id: client_id_enum.clone(),
-                    connected_at: std::time::Instant::now(),
-                };
+                let client_info = ClientInfo::new(client_id_enum.clone());
                 
                 connected_clients.clients.insert(client_id_enum.clone(), client_info);
                 player_registry.register_player(client_id_enum.clone(), player_id);

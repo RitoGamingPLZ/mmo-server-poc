@@ -2597,9 +2597,13 @@ dependencies = [
  "enfync",
  "futures-util",
  "glam 0.30.4",
+ "proc-macro2",
+ "quote",
+ "rand 0.8.5",
  "rmp-serde",
  "serde",
  "serde_json",
+ "syn 2.0.104",
  "tokio",
  "tokio-tungstenite 0.27.0",
 ]

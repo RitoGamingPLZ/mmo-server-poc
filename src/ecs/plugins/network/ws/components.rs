@@ -9,6 +9,7 @@ pub enum WsEvent {
     Disconnected(SocketAddr),
     Message { client: SocketAddr, data: Vec<u8> },
     TextMessage { client: SocketAddr, text: String },
+    Broadcast { client: SocketAddr, message: String },
 }
 
 #[derive(Resource)]

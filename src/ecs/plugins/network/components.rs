@@ -16,6 +16,39 @@ pub enum ClientId {
 pub struct ClientInfo {
     pub id: ClientId,
     pub connected_at: std::time::Instant,
+    pub last_sync: std::time::Instant,
+    pub last_heartbeat: std::time::Instant,
+    pub requires_full_sync: bool,
+}
+
+impl ClientInfo {
+    pub fn new(id: ClientId) -> Self {
+        let now = std::time::Instant::now();
+        Self {
+            id,
+            connected_at: now,
+            last_sync: now,
+            last_heartbeat: now,
+            requires_full_sync: true, // New clients need full sync
+        }
+    }
+    
+    pub fn update_heartbeat(&mut self) {
+        self.last_heartbeat = std::time::Instant::now();
+    }
+    
+    pub fn update_sync(&mut self) {
+        self.last_sync = std::time::Instant::now();
+        self.requires_full_sync = false;
+    }
+    
+    pub fn is_timed_out(&self, timeout_duration: std::time::Duration) -> bool {
+        self.last_heartbeat.elapsed() > timeout_duration
+    }
+    
+    pub fn needs_full_sync_after_reconnect(&self, reconnect_threshold: std::time::Duration) -> bool {
+        self.requires_full_sync || self.last_sync.elapsed() > reconnect_threshold
+    }
 }
 
 // Unified events for both UDP and WS
@@ -30,6 +63,18 @@ pub struct ClientDisconnectedEvent {
     pub client_id: ClientId,
     pub player_id: u32,
     pub reason: String,
+}
+
+#[derive(Event)]
+pub struct HeartbeatEvent {
+    pub client_id: ClientId,
+    pub timestamp: std::time::Instant,
+}
+
+#[derive(Event)]
+pub struct ClientTimeoutEvent {
+    pub client_id: ClientId,
+    pub player_id: u32,
 }
 
 // Shared connected clients resource
