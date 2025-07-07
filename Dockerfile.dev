@@ -1,0 +1,21 @@
+FROM rust:1.88
+
+WORKDIR /app
+
+# Install system dependencies and cargo-watch
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    && rm -rf /var/lib/apt/lists/* \
+    && cargo install cargo-watch
+
+# Copy manifest files for dependency caching
+COPY Cargo.toml Cargo.lock ./
+
+# Pre-build dependencies
+RUN mkdir src && echo "fn main() {}" > src/main.rs && cargo build && rm -rf src
+
+# Expose the WebSocket port
+EXPOSE 5000
+
+# Use cargo-watch to rebuild on file changes
+CMD ["cargo", "watch", "-x", "run", "--poll"]

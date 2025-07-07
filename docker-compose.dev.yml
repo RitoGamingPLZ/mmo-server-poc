@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  # Game Server (Rust) - Development Mode
+  game-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - "${WEBSOCKET_PORT:-5000}:${WEBSOCKET_PORT:-5000}"
+    networks:
+      - mmo-network
+    restart: unless-stopped
+    env_file:
+      - .env.server
+    environment:
+      - RUST_LOG=${RUST_LOG:-debug}
+      - WEBSOCKET_HOST=${WEBSOCKET_HOST:-0.0.0.0}
+      - WEBSOCKET_PORT=${WEBSOCKET_PORT:-5000}
+      - WORLD_BOUNDS_X=${WORLD_BOUNDS_X:-1000.0}
+      - WORLD_BOUNDS_Y=${WORLD_BOUNDS_Y:-1000.0}
+      - PLAYER_SPEED=${PLAYER_SPEED:-100.0}
+    volumes:
+      - ./src:/app/src:ro
+      - ./Cargo.toml:/app/Cargo.toml:ro
+      - ./Cargo.lock:/app/Cargo.lock
+      - cargo-cache:/usr/local/cargo/registry
+      - target-cache:/app/target
+
+  # Client (TypeScript/Vite) - Development Mode
+  client:
+    build:
+      context: ./client-test-tool
+      dockerfile: Dockerfile
+    ports:
+      - "5173:5173"
+    networks:
+      - mmo-network
+    depends_on:
+      - game-server
+    restart: unless-stopped
+    env_file:
+      - ./client-test-tool/.env.client
+    environment:
+      - VITE_WEBSOCKET_URL=${VITE_WEBSOCKET_URL:-ws://localhost:5000}
+    volumes:
+      - ./client-test-tool:/app
+      - /app/node_modules
+
+networks:
+  mmo-network:
+    driver: bridge
+
+volumes:
+  cargo-cache:
+  target-cache:

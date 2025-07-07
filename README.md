@@ -41,6 +41,13 @@ docker-compose down
 ### Development
 The client runs with hot-reload - edit files in `client-test-tool/src/` and changes will appear automatically.
 
+For **server hot-reload** during development:
+```bash
+# Use the development compose file with cargo-watch
+docker-compose -f docker-compose.dev.yml up --build
+```
+The server will automatically rebuild and restart when you edit Rust files in `src/`.
+
 ### Logs
 ```bash
 # View all logs
