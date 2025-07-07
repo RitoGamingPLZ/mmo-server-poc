@@ -60,6 +60,13 @@ macro_rules! networked_component {
                 stringify!($name)
             }
         }
+
+        // Implement auto-registration trait
+        impl crate::ecs::plugins::network::component_registry::AutoRegisterNetworkedComponent for $name {
+            fn register() {
+                crate::ecs::plugins::network::component_registry::register_networked_component::<$name>();
+            }
+        }
     };
     
     // Helper for checking field changes with optional threshold

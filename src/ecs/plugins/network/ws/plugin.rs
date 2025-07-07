@@ -3,9 +3,7 @@ use crate::ecs::plugins::network::components::*;
 use crate::ecs::plugins::network::ws::components::*;
 use crate::ecs::plugins::network::ws::systems::*;
 use crate::ecs::plugins::network::{NetworkStateSnapshot, NetworkIdAllocator};
-use crate::ecs::core::{Position, NetworkedPosition};
-use crate::ecs::plugins::movement::components::{Velocity, NetworkedVelocity};
-use crate::auto_sync_networked;
+use crate::ecs::plugins::network::component_registry::NetworkedComponentRegistry;
 
 pub struct WsNetworkPlugin;
 
@@ -18,17 +16,17 @@ impl Plugin for WsNetworkPlugin {
             .init_resource::<ConnectedClients>()
             .init_resource::<NetworkPlayerRegistry>()
             .init_resource::<NetworkStateSnapshot>()
+            .init_resource::<NetworkedComponentRegistry>()
             .insert_resource(NetworkIdAllocator::new())
             .add_event::<ClientConnectedEvent>()
             .add_event::<ClientDisconnectedEvent>()
-            .add_event::<HeartbeatEvent>()
-            .add_event::<ClientTimeoutEvent>()
-            .add_systems(Update, (poll_ws_messages, heartbeat_monitor_system))
+            .add_systems(Update, poll_ws_messages)
             .add_systems(FixedUpdate, batched_broadcast_system);
         
-        // Auto-register networked component sync systems
-        auto_sync_networked!(app, NetworkedPosition, Position);
-        auto_sync_networked!(app, NetworkedVelocity, Velocity);
+        // Networked components are auto-registered in their respective plugins:
+        // - NetworkedPosition: auto-registered in NetworkPlugin 
+        // - NetworkedVelocity: auto-registered in MovementPlugin
+        // - Additional components: auto-registered in their respective plugins
 
         // Spawn background server in a new thread
         std::thread::spawn(move || {

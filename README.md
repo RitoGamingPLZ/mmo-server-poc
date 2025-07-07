@@ -108,6 +108,16 @@ The server uses a **plugin-based architecture** where each major system is imple
 
 Each plugin is independent and focused on one thing. This makes the code easier to understand and modify.
 
+## 📚 Documentation
+
+### Networking System
+- **[Network Plugin README](src/ecs/plugins/network/README.md)** - Complete networking documentation and guide
+
+### Plugin Documentation
+- **[Core Plugin](src/ecs/core/README.md)** - Basic game world components
+- **[Movement Plugin](src/ecs/plugins/movement/README.md)** - Physics and movement systems
+- **[Player Plugin](src/ecs/plugins/player/README.md)** - Player lifecycle management
+
 ## 🎯 Key Concepts
 
 ### 1. **Entity Component System (ECS)**

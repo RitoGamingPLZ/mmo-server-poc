@@ -16,7 +16,7 @@ This server uses a plugin-based architecture where each major system is implemen
 
 ## Key Features
 
-- **Smart Networking**: Client-aware synchronization with heartbeat monitoring
+- **Smart Networking**: Client-aware synchronization with delta updates
 - **Physics Simulation**: Real-time movement with friction and boundary collision
 - **Multiple Protocols**: Both WebSocket (web clients) and UDP (game clients) support
 - **Scalable Architecture**: Plugin system allows easy feature additions

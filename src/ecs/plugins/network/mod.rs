@@ -5,6 +5,7 @@ pub mod plugin;
 pub mod networked_state;
 pub mod networked_object;
 pub mod auto_networked;
+pub mod component_registry;
 
 pub use networked_state::*;
 pub use networked_object::*;

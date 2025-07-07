@@ -52,6 +52,11 @@ body {
   color: black;
 }
 
+#connection-status.error {
+  background-color: #ff8844;
+  color: white;
+}
+
 #game-canvas {
   border: 2px solid #646cff;
   border-radius: 8px;
