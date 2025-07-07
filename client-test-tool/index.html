@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MMO Game Client</title>
+  </head>
+  <body>
+    <div id="app">
+      <div id="game-container">
+        <div id="connection-status">Disconnected</div>
+        <canvas id="game-canvas" width="800" height="600"></canvas>
+        <div id="controls">
+          <div class="control-group">
+            <label>Movement:</label>
+            <div class="movement-controls">
+              <button id="btn-up">↑</button>
+              <div>
+                <button id="btn-left">←</button>
+                <button id="btn-stop">STOP</button>
+                <button id="btn-right">→</button>
+              </div>
+              <button id="btn-down">↓</button>
+            </div>
+          </div>
+          <div class="control-group">
+            <button id="btn-connect">Connect</button>
+            <button id="btn-disconnect">Disconnect</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

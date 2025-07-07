@@ -1,0 +1,9 @@
+target/
+client-test-tool/node_modules/
+client-test-tool/dist/
+.git/
+.gitignore
+README.md
+docker-compose.yml
+Dockerfile
+*.log
