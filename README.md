@@ -5,6 +5,24 @@
 ### Prerequisites
 - Docker and Docker Compose installed
 
+#### Install Docker
+**Ubuntu/Debian:**
+```bash
+# Update package index
+sudo apt-get update
+
+# Install Docker
+sudo apt-get install docker.io docker-compose
+
+# Add user to docker group (optional, avoids using sudo)
+sudo usermod -aG docker $USER
+newgrp docker
+```
+
+**macOS and Windows:**
+- Download Docker Desktop from https://www.docker.com/products/docker-desktop/
+- Install and start Docker Desktop
+
 ### Configuration
 Copy the example environment files and customize if needed:
 ```bash
