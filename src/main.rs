@@ -26,8 +26,6 @@ fn main() {
 
 fn setup_game(mut commands: Commands) {
     println!("Starting 2D Shooter Game Server...");
-    
-    println!("Game server initialized with 2 players");
 }
 
 pub fn simulate_input(input_buffer: &mut crate::ecs::plugins::input::InputBuffer, player_id: u32, command: crate::ecs::plugins::input::InputCommand) {
