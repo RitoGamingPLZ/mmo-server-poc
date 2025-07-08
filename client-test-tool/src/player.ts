@@ -32,13 +32,32 @@ export class PlayerManager {
     return this.players.get(playerId);
   }
 
-  updatePlayerFromEntity(entityUpdate: EntityUpdate): void {
-    const playerId = entityUpdate.id;
+  removePlayer(playerId: number): void {
+    console.log(`🗑️ Removing player ${playerId} from client`);
+    this.players.delete(playerId);
+  }
+
+  removePlayerByNetworkId(networkId: number): void {
+    // Find player by network_id (which is stored as the player's id in our system)
+    const player = this.players.get(networkId);
+    if (player) {
+      console.log(`🗑️ Removing player ${player.id} (network_id: ${networkId}) from client`);
+      this.players.delete(networkId);
+    } else {
+      console.log(`⚠️ Could not find player with network_id ${networkId} to remove`);
+    }
+  }
+
+  updatePlayerFromEntity(entityUpdate: any): void {
+    const playerId = entityUpdate.network_id;
     const now = performance.now();
+    
+    console.log(`🎮 Processing entity update for player ${playerId}:`, entityUpdate);
     
     // Get or create player
     let player = this.players.get(playerId);
     if (!player) {
+      console.log(`✨ Creating new player ${playerId}`);
       player = {
         id: playerId,
         serverPosition: { x: 0, y: 0 },
@@ -51,18 +70,18 @@ export class PlayerManager {
       this.players.set(playerId, player);
     }
     
-    // Process component updates
-    entityUpdate.cs.forEach((componentUpdate: ComponentUpdate) => {
-      switch (componentUpdate.c) {
-        case 'NetworkedPosition':
-          this.updatePosition(player!, componentUpdate.u, now);
+    // Process component updates from server format
+    Object.entries(entityUpdate.components).forEach(([componentName, componentData]: [string, any]) => {
+      switch (componentName) {
+        case 'position':
+          this.updatePositionFromServer(player!, componentData, now);
           break;
-        case 'NetworkedVelocity':
-          this.updateVelocity(player!, componentUpdate.u, now);
+        case 'velocity':
+          this.updateVelocityFromServer(player!, componentData, now);
           break;
         default:
           // Log unknown components for debugging new server features
-          console.log(`🔍 Unknown component: ${componentUpdate.c}`, componentUpdate.u);
+          console.log(`🔍 Unknown component: ${componentName}`, componentData);
           break;
       }
     });
@@ -128,6 +147,64 @@ export class PlayerManager {
           break;
       }
     });
+    
+    // For non-local players, use server velocity directly
+    // For local player, we could implement prediction here
+    if (!player.isMyPlayer) {
+      player.velocity.x = player.serverVelocity.x;
+      player.velocity.y = player.serverVelocity.y;
+    } else {
+      // For local player, blend with server velocity for smoother feel
+      const blend = 0.7; // 70% server, 30% client
+      player.velocity.x = player.velocity.x * (1 - blend) + player.serverVelocity.x * blend;
+      player.velocity.y = player.velocity.y * (1 - blend) + player.serverVelocity.y * blend;
+    }
+    
+    player.lastServerUpdate = timestamp;
+  }
+
+  private updatePositionFromServer(player: Player, positionData: any, timestamp: number): void {
+    console.log(`📍 Updating position for player ${player.id}:`, positionData);
+    
+    if (positionData.x !== undefined) {
+      player.serverPosition.x = positionData.x;
+    }
+    if (positionData.y !== undefined) {
+      player.serverPosition.y = positionData.y;
+    }
+    
+    // Server reconciliation - smoothly correct client position
+    const timeSinceUpdate = timestamp - player.lastServerUpdate;
+    const errorThreshold = 5.0; // pixels
+    
+    const positionError = Math.sqrt(
+      Math.pow(player.position.x - player.serverPosition.x, 2) +
+      Math.pow(player.position.y - player.serverPosition.y, 2)
+    );
+    
+    if (positionError > errorThreshold || player.isMyPlayer) {
+      // Significant error or local player - snap to server position for authority
+      player.position.x = player.serverPosition.x;
+      player.position.y = player.serverPosition.y;
+    } else {
+      // Small error - interpolate smoothly for remote players
+      const lerpFactor = Math.min(1.0, (timeSinceUpdate / 100)); // 100ms lerp time
+      player.position.x = player.position.x + (player.serverPosition.x - player.position.x) * lerpFactor;
+      player.position.y = player.position.y + (player.serverPosition.y - player.position.y) * lerpFactor;
+    }
+    
+    player.lastServerUpdate = timestamp;
+  }
+
+  private updateVelocityFromServer(player: Player, velocityData: any, timestamp: number): void {
+    console.log(`🏃 Updating velocity for player ${player.id}:`, velocityData);
+    
+    if (velocityData.x !== undefined) {
+      player.serverVelocity.x = velocityData.x;
+    }
+    if (velocityData.y !== undefined) {
+      player.serverVelocity.y = velocityData.y;
+    }
     
     // For non-local players, use server velocity directly
     // For local player, we could implement prediction here

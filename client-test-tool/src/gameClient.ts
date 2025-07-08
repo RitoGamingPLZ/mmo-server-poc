@@ -62,7 +62,35 @@ export class GameClient {
         this.playerManager.setMyPlayerId(data.p);
       }
       
-      // Process component-based format (current server implementation)
+      // Process server's actual message format
+      if (data.message_type && data.entity_updates && Array.isArray(data.entity_updates)) {
+        const messageType = data.message_type;
+        const isFullSync = messageType === 'full_sync';
+        
+        if (isFullSync) {
+          // Clear existing players for full sync
+          this.playerManager.clearPlayers();
+          console.log(`🔄 Full sync received: ${data.entity_updates.length} entities`);
+        } else if (messageType === 'delta_update') {
+          console.log(`📦 Delta update received: ${data.entity_updates.length} entities changed`);
+        }
+        
+        // Process each entity update
+        data.entity_updates.forEach((entityUpdate: any) => {
+          this.playerManager.updatePlayerFromEntity(entityUpdate);
+        });
+        
+        return;
+      }
+      
+      // Handle entity removal (player disconnect)
+      if (data.message_type === 'entity_removed') {
+        console.log(`👋 Entity ${data.network_id} (player ${data.player_id}) removed: ${data.reason}`);
+        this.playerManager.removePlayerByNetworkId(data.network_id);
+        return;
+      }
+      
+      // Process component-based format (compact format if implemented later)
       if (data.t && data.es && Array.isArray(data.es)) {
         const messageType = data.t;
         const isFullSync = messageType === 'full_sync';

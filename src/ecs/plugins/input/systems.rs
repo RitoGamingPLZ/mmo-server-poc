@@ -41,11 +41,16 @@ pub fn input_processing_system(
                     // Apply the player's max speed to get the desired velocity
                     desired_velocity.x = normalized_direction.x * profile.max_speed;
                     desired_velocity.y = normalized_direction.y * profile.max_speed;
+                    
+                    println!("🎮 Player {} input: direction={:?} -> desired_velocity=({:.2}, {:.2})", 
+                        player.id, direction, desired_velocity.x, desired_velocity.y);
                 }
                 InputCommand::Stop => {
                     // Player wants to stop moving
                     desired_velocity.x = 0.0;
                     desired_velocity.y = 0.0;
+                    
+                    println!("🛑 Player {} stop command", player.id);
                 }
             }
         }

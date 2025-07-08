@@ -16,8 +16,14 @@ export type ComponentUpdate = {
 };
 
 export type EntityUpdate = {
-  id: number;  // entity_id (network_id)
-  cs: ComponentUpdate[];  // components (shortened)
+  network_id: number;  // network_id from server
+  components: { [key: string]: any };  // components object from server
+};
+
+// Server's actual format
+export type ServerEntityUpdate = {
+  network_id: number;
+  components: { [key: string]: any };
 };
 
 export type CompactNetworkMessage = {

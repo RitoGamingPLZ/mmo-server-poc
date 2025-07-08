@@ -73,8 +73,15 @@ pub fn acceleration_system(
                 1.0
             };
             
+            let old_velocity_x = velocity.x;
+            let old_velocity_y = velocity.y;
             velocity.x += diff_x * change_factor;
             velocity.y += diff_y * change_factor;
+            
+            if (velocity.x - old_velocity_x).abs() > 0.1 || (velocity.y - old_velocity_y).abs() > 0.1 {
+                println!("🏃 Acceleration: desired=({:.2}, {:.2}) current=({:.2}, {:.2}) change_factor={:.3}", 
+                    desired_velocity.x, desired_velocity.y, velocity.x, velocity.y, change_factor);
+            }
         } else {
             // Very small difference - just snap to the desired velocity
             velocity.x = desired_velocity.x;

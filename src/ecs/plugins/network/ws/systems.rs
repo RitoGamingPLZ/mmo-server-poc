@@ -25,7 +25,7 @@ use tokio::sync::Mutex;
 use crate::ecs::plugins::input::{InputCommand, InputCommandEvent};
 use crate::ecs::plugins::player::{PlayerSpawnEvent, PlayerDespawnEvent};
 use crate::ecs::plugins::network::ws::components::*;
-use crate::ecs::plugins::network::NetworkUpdates;
+use crate::ecs::plugins::network::{NetworkUpdates, NetworkId, NetworkSnapshot, EntityUpdate, NetworkMessage};
 
 pub async fn ws_server_task(ws_send: Sender<WsEvent>) {
     let host = std::env::var("WEBSOCKET_HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
@@ -255,6 +255,89 @@ pub fn send_network_updates_to_clients_system(
     network_updates.messages.clear();
 }
 
+
+/// System: Send full sync to newly connected players
+pub fn send_full_sync_to_new_players_system(
+    mut connect_events: EventReader<ClientConnectedEvent>,
+    networked_query: Query<(&NetworkId, &NetworkSnapshot)>,
+    _player_registry: Res<NetworkPlayerRegistry>,
+) {
+    for event in connect_events.read() {
+        println!("🔄 Sending full sync to new player {}", event.player_id);
+        
+        // Build full sync message for all existing entities
+        let mut entity_updates = Vec::new();
+        
+        for (network_id, snapshot) in networked_query.iter() {
+            if !snapshot.components.is_empty() {
+                entity_updates.push(EntityUpdate {
+                    network_id: network_id.0,
+                    components: snapshot.components.clone(),
+                });
+            }
+        }
+        
+        if !entity_updates.is_empty() {
+            let full_sync_message = NetworkMessage {
+                message_type: "full_sync".to_string(),
+                entity_updates,
+            };
+            
+            let json_message = serde_json::to_string(&full_sync_message).unwrap_or_else(|e| {
+                println!("Failed to serialize full sync message: {}", e);
+                return "{}".to_string();
+            });
+            
+            println!("📤 Sending full sync with {} entities to player {}", 
+                full_sync_message.entity_updates.len(), event.player_id);
+                
+            send_message_to_client(&event.client_id, &json_message);
+        }
+    }
+}
+
+/// System: Notify all players when someone disconnects by sending entity removal
+pub fn notify_player_disconnect_system(
+    mut disconnect_events: EventReader<ClientDisconnectedEvent>,
+    connected_clients: Res<ConnectedClients>,
+    player_registry: Res<NetworkPlayerRegistry>,
+    main_player_registry: Res<crate::ecs::plugins::player::components::PlayerRegistry>,
+    networked_query: Query<&NetworkId, With<crate::ecs::plugins::player::Player>>,
+) {
+    for event in disconnect_events.read() {
+        println!("📤 Notifying all players that player {} disconnected", event.player_id);
+        
+        // Find the network_id of the disconnected player's entity
+        if let Some(player_entity) = main_player_registry.get_player_entity(event.player_id) {
+            if let Ok(network_id) = networked_query.get(player_entity) {
+                // Create an entity removal message
+                let disconnect_message = serde_json::json!({
+                    "message_type": "entity_removed",
+                    "network_id": network_id.0,
+                    "player_id": event.player_id,
+                    "reason": event.reason
+                });
+                
+                let json_message = serde_json::to_string(&disconnect_message).unwrap_or_else(|e| {
+                    println!("Failed to serialize disconnect message: {}", e);
+                    return "{}".to_string();
+                });
+                
+                // Send to all remaining connected clients
+                for (client_id, _client_info) in &connected_clients.clients {
+                    if client_id != &event.client_id {  // Don't send to the disconnected client
+                        if let Some(_remaining_player_id) = player_registry.get_player_id(client_id) {
+                            send_message_to_client(client_id, &json_message);
+                        }
+                    }
+                }
+                
+                println!("📤 Sent entity removal for network_id {} (player {}) to {} clients", 
+                    network_id.0, event.player_id, connected_clients.clients.len() - 1);
+            }
+        }
+    }
+}
 
 /// Helper function to send a message to a specific client
 fn send_message_to_client(client_id: &ClientId, message: &str) {

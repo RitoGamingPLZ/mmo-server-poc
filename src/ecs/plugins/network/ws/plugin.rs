@@ -14,7 +14,11 @@ impl Plugin for WsNetworkPlugin {
             .init_resource::<NetworkPlayerRegistry>()
             .add_event::<ClientConnectedEvent>()
             .add_event::<ClientDisconnectedEvent>()
-            .add_systems(Update, poll_ws_messages);
+            .add_systems(Update, (
+                poll_ws_messages,
+                send_full_sync_to_new_players_system,
+                notify_player_disconnect_system,
+            ));
             // Network sending system moved to main NetworkPlugin chain
         
         // Networked components are auto-registered in their respective plugins:
