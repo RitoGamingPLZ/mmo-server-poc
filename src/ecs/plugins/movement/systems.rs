@@ -196,6 +196,8 @@ pub fn sync_velocity_to_network_system(
     mut query: Query<(&Velocity, &mut NetworkVelocity), Changed<Velocity>>,
 ) {
     for (velocity, mut network_vel) in query.iter_mut() {
+        println!("Velocity sync: ({:.3}, {:.3}) -> ({:.3}, {:.3})", 
+            network_vel.x, network_vel.y, velocity.x, velocity.y);
         network_vel.x = velocity.x;
         network_vel.y = velocity.y;
     }

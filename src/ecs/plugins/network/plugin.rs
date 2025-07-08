@@ -24,21 +24,21 @@ impl Plugin for NetworkPlugin {
             // Add WebSocket plugin based on mode
             .add_plugins(crate::ecs::plugins::network::ws::WsNetworkPlugin)
             
-            // Add networking components to players when they spawn (after player spawn system)
-            .add_systems(Update, (
-                crate::ecs::plugins::player::systems::player_spawn_system,
-                add_networking_to_players_system,
-            ).chain())
-            
             // Network systems run at 20Hz for consistent packet rate
             .add_systems(FixedUpdate, (
-                detect_component_changes_system::<crate::ecs::plugins::transform::NetworkPosition>,
-                detect_component_changes_system::<crate::ecs::plugins::movement::NetworkVelocity>,
-                build_delta_updates_system,
-                build_full_sync_system,
-                crate::ecs::plugins::network::ws::systems::send_network_updates_to_clients_system,
-            ).chain()
-            .after(crate::ecs::plugins::transform::systems::sync_position_to_network_system)
-            .after(crate::ecs::plugins::movement::systems::sync_velocity_to_network_system));
+                (
+                    detect_component_changes_system::<crate::ecs::plugins::transform::NetworkPosition>,
+                    detect_component_changes_system::<crate::ecs::plugins::movement::NetworkVelocity>,
+                    build_delta_updates_system,
+                    build_full_sync_system,
+                    crate::ecs::plugins::network::ws::systems::send_network_updates_to_clients_system
+                ).chain()
+                .after(crate::ecs::plugins::transform::systems::sync_position_to_network_system)
+                .after(crate::ecs::plugins::movement::systems::sync_velocity_to_network_system),
+                (
+                    crate::ecs::plugins::player::systems::player_spawn_system,
+                    add_networking_to_players_system,
+                ).chain()
+            ));
     }
 }
