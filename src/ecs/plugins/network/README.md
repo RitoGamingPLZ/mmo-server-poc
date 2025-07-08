@@ -1,303 +1,253 @@
 # Network Plugin
 
-This plugin provides the networking infrastructure for the MMO game server, including real-time synchronization of game state to connected clients.
+Real-time networking system for MMO game server with delta updates and WebSocket communication.
 
-## Quick Start
+## Overview
 
-The networking system uses **auto-registration** - components register themselves when declared!
-
-### 1. Define a networked component:
-
-```rust
-use crate::{networked_component, impl_from_source};
-
-networked_component! {
-    pub struct NetworkedHealth {
-        #[threshold = 1.0]  // Only sync when health changes > 1.0
-        pub current: f32,
-        pub max: f32,
-    }
-}
-
-impl_from_source!(NetworkedHealth, Health, {current, max});
-```
-
-### 2. Register auto-sync in your plugin:
-
-```rust
-use crate::auto_sync_networked;
-
-impl Plugin for MyPlugin {
-    fn build(&self, app: &mut App) {
-        auto_sync_networked!(app, NetworkedHealth, Health);
-    }
-}
-```
-
-### 3. That's it!
-Your component automatically:
-- ✅ Registers itself in the networking system
-- ✅ Syncs with configurable thresholds
-- ✅ Includes delta updates and full sync
-- ✅ Compresses messages for efficiency
-
----
+The networking system provides:
+- **Delta Updates**: Only sends changed components to clients
+- **Full Sync**: Periodic complete state synchronization 
+- **WebSocket Protocol**: Real-time bidirectional communication on port 5000
+- **Change Detection**: Automatic detection of component modifications
+- **Network Components**: Separate networking versions of game components
 
 ## Architecture
 
-The networking system uses a **trait-based registry approach** with these key components:
+### Core Components
 
-### NetworkedObject System
 ```rust
+// Network identification for entities
 #[derive(Component)]
-pub struct NetworkedObject {
-    pub network_id: u32,
-    pub object_type: NetworkedObjectType,
+pub struct NetworkId(pub u32);
+
+// Tracks which components changed since last sync
+#[derive(Component)]
+pub struct NetworkDirty {
+    pub changed_components: Vec<String>,
+}
+
+// Stores previous component values for change detection
+#[derive(Component)]
+pub struct NetworkSnapshot {
+    pub components: HashMap<String, serde_json::Value>,
 }
 ```
 
-Supported types: `Player`, `NPC`, `Projectile`, `Item`, `Environment`, `Custom`
+### Network Message Format
 
-### NetworkedState Trait
-All networked components implement `NetworkedState` for automatic field change detection and serialization.
-
-### Component Registry
-The `NetworkedComponentRegistry` resource automatically collects and handles all registered networked components.
-
-### Features
-- **Auto-Registration**: Components register themselves when declared
-- **Single Query**: One query handles all networked components
-- **Delta Compression**: Only changed fields are synchronized
-- **WebSocket Protocol**: Real-time bidirectional communication (port 5000)
-- **Message Types**: `full_sync` and `delta_update`
-
----
-
-## Advanced Features
-
-### Custom Thresholds
-Control when changes are considered significant enough to sync:
-
-```rust
-networked_component! {
-    pub struct NetworkedTransform {
-        #[threshold = 0.01]   // High precision for position
-        pub x: f32,
-        #[threshold = 0.01]
-        pub y: f32,
-        #[threshold = 0.1]    // Lower precision for rotation
-        pub rotation: f32,
+```json
+{
+  "message_type": "delta_update",
+  "entity_updates": [
+    {
+      "network_id": 1,
+      "components": {
+        "position": {"x": 100.5, "y": 200.3},
+        "velocity": {"x": 0.0, "y": 0.0}
+      }
     }
+  ]
 }
 ```
 
-### Complex Data Types
-The system supports any serializable data type:
+## Component System
+
+### Game Components vs Network Components
+
+Each game component has a corresponding network component:
 
 ```rust
-networked_component! {
-    pub struct NetworkedPlayer {
-        pub name: String,                     // Syncs when name changes
-        pub items: Vec<String>,               // Syncs when inventory changes
-        #[threshold = 0.01]
-        pub health: f32,                      // Syncs when health changes > 0.01
-        pub stats: HashMap<String, u32>,      // Syncs when stats change
-    }
-}
+// Game component (physics, game logic)
+#[derive(Component)]
+pub struct Position { pub x: f32, pub y: f32 }
+
+// Network component (serialization, networking)
+#[derive(Component, Serialize, Deserialize)]
+pub struct NetworkPosition { pub x: f32, pub y: f32 }
 ```
 
-### Conditional Synchronization
-Implement custom logic for when components should sync:
+### Sync Systems
+
+Sync systems bridge game components to network components:
 
 ```rust
-impl NetworkedState for NetworkedSpecialComponent {
-    fn get_field_changes(&self, previous: Option<&Self>) -> Vec<FieldUpdate> {
-        if let Some(prev) = previous {
-            if self.should_sync_to_clients() {
-                // Return field updates
-            } else {
-                return Vec::new(); // Don't sync
-            }
-        }
-        // ... implementation
-    }
-}
-```
-
----
-
-## Performance
-
-### Delta Compression
-- **Change Detection**: Only sends data when it changes beyond configurable thresholds
-- **Field-Level Updates**: Only sends changed fields, not entire components
-- **Batched Updates**: Groups multiple changes into single network messages
-- **Message Compression**: Uses shortened JSON keys for efficiency
-
-### Scalable Architecture
-- **Single Query**: Uses one `Query<(Entity, &NetworkedObject)>` instead of N queries
-- **Registry Pattern**: Automatic component handling via trait-based registry
-- **Auto-Registration**: Components register themselves at compile time
-- **Lazy Synchronization**: Only syncs when data actually changes
-
-### Before vs After Performance
-
-**Old Approach (Manual Queries):**
-```rust
-// BAD: Required separate queries for each component type
-pub fn sync_system(
-    position_query: Query<(Entity, &NetworkedPosition, &NetworkedObject)>,
-    velocity_query: Query<(Entity, &NetworkedVelocity, &NetworkedObject)>,
-    health_query: Query<(Entity, &NetworkedHealth, &NetworkedObject)>,
-    // ... 10 more queries for 10 more components
+pub fn sync_position_to_network_system(
+    mut query: Query<(&Position, &mut NetworkPosition), Changed<Position>>,
 ) {
-    // Manual sync logic for each component type
+    for (position, mut network_pos) in query.iter_mut() {
+        network_pos.x = position.x;
+        network_pos.y = position.y;
+    }
 }
 ```
 
-**New Approach (Registry-Based):**
+## System Flow
+
+### 1. Player Input → Game State Updates
+```
+WebSocket Input → InputCommand → DesiredVelocity → Movement System → Position/Velocity
+```
+
+### 2. Game State → Network Sync
+```
+Position/Velocity → sync_*_to_network_system → NetworkPosition/NetworkVelocity
+```
+
+### 3. Change Detection & Broadcasting
+```
+NetworkComponents → detect_component_changes_system → build_delta_updates_system → WebSocket Broadcast
+```
+
+## Adding New Networked Components
+
+### 1. Define Components
+
 ```rust
-// GOOD: Single query + registry handles all components automatically
-pub fn sync_system(
-    networked_query: Query<(Entity, &NetworkedObject)>,
-    registry: Res<NetworkedComponentRegistry>,
-    world: &World,
+// Game component
+#[derive(Component, Debug, Clone, Copy)]
+pub struct Health {
+    pub current: f32,
+    pub max: f32,
+}
+
+// Network component
+#[derive(Component, Clone, PartialEq, Serialize, Deserialize)]
+pub struct NetworkHealth {
+    pub current: f32,
+    pub max: f32,
+}
+
+impl NetworkedComponent for NetworkHealth {
+    fn component_name() -> &'static str { "health" }
+}
+```
+
+### 2. Add Sync System
+
+```rust
+pub fn sync_health_to_network_system(
+    mut query: Query<(&Health, &mut NetworkHealth), Changed<Health>>,
 ) {
-    // All components handled automatically through the registry
-    let updates = build_delta_updates_registry(&networked_query, world, &registry, snapshot);
+    for (health, mut network_health) in query.iter_mut() {
+        network_health.current = health.current;
+        network_health.max = health.max;
+    }
 }
 ```
 
----
-
-## Usage Examples
-
-### Complete Combat System Example
+### 3. Register Systems
 
 ```rust
-// File: src/ecs/plugins/combat/components.rs
-use bevy::prelude::*;
-use crate::{networked_component, impl_from_source};
-
-// Regular components
-#[derive(Component, Debug, Clone, Copy)]
-pub struct Health { pub current: f32, pub max: f32 }
-
-#[derive(Component, Debug, Clone, Copy)]
-pub struct Mana { pub current: f32, pub max: f32 }
-
-// Networked versions - they auto-register!
-networked_component! {
-    pub struct NetworkedHealth {
-        #[threshold = 0.1] pub current: f32,
-        #[threshold = 0.1] pub max: f32,
-    }
-}
-
-networked_component! {
-    pub struct NetworkedMana {
-        #[threshold = 0.1] pub current: f32,
-        #[threshold = 0.1] pub max: f32,
-    }
-}
-
-// Conversions
-impl_from_source!(NetworkedHealth, Health, {current, max});
-impl_from_source!(NetworkedMana, Mana, {current, max});
-
-// Plugin setup
-impl Plugin for CombatPlugin {
+impl Plugin for HealthPlugin {
     fn build(&self, app: &mut App) {
-        auto_sync_networked!(app, NetworkedHealth, Health);
-        auto_sync_networked!(app, NetworkedMana, Mana);
+        app.add_systems(FixedUpdate, sync_health_to_network_system);
+    }
+}
+
+impl Plugin for NetworkPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems(FixedUpdate, (
+            detect_component_changes_system::<NetworkHealth>,
+            // ... other systems
+        ).chain()
+        .after(sync_health_to_network_system));
     }
 }
 ```
 
-**Result**: Fully networked combat system with automatic delta updates, full sync for new clients, and zero modification to networking core files.
+## System Ordering
 
-### Spawning Networked Entities
+Critical system ordering for proper networking:
 
-```rust
-// Spawn an NPC that will be automatically networked
-commands.spawn((
-    NPCBundle::new_merchant("Bob the Merchant".to_string()),
-    Position { x: 100.0, y: 100.0 },
-    NetworkedObject::new_npc(id_allocator.allocate_id()),
-    Health { current: 100.0, max: 100.0 },
-));
+```
+1. Game Logic Systems (movement, combat, etc.)
+2. Sync Systems (sync_*_to_network_system)  
+3. Network Systems (change detection, delta updates, broadcasting)
 ```
 
----
+This ensures network components reflect final game state before transmission.
 
-## Migration Guide
+## Performance Features
 
-### From Manual Registration
-If you have existing manual registrations, you can remove them:
+### Delta Updates
+- Only changed components are sent to clients
+- Reduces bandwidth usage significantly
+- Automatic change detection using Bevy's `Changed<T>` queries
 
-```rust
-// OLD: Remove this from component_registry.rs
-register_networked_components!(
-    NetworkedPosition,
-    NetworkedVelocity,
-    NetworkedHealth,
-    // ... etc
-);
+### Full Sync
+- Periodic complete state synchronization (every 10 seconds)
+- Ensures client consistency
+- Handles packet loss recovery
 
-// NEW: Nothing needed! Components auto-register.
-```
-
-### Updating Existing Components
-1. Replace manual `NetworkedState` implementations with `networked_component!` macro
-2. Add `auto_sync_networked!` calls to your plugins
-3. Remove manual registration code
-
----
+### Batched Messages
+- Multiple entity updates grouped into single WebSocket message
+- Reduces network overhead
+- JSON serialization for human-readable debugging
 
 ## Debugging
 
-### Check Registered Components
+### Network Traffic Logging
 ```rust
-fn debug_networking_system(registry: Res<NetworkedComponentRegistry>) {
-    println!("Registered {} networked components", registry.syncers.len());
+// In build_delta_updates_system
+for update in &entity_updates {
+    println!("Entity {}: {:?}", update.network_id, update.components);
 }
 ```
 
-### Network Message Logging
-The system automatically logs all sync operations:
+### Component Sync Logging
+```rust
+// In sync systems
+println!("Position sync: ({}, {}) -> ({}, {})", 
+    network_pos.x, network_pos.y, position.x, position.y);
 ```
-Full sync to player 1 (reconnection): 15 entities, 2048 bytes
-Delta update to player 2 (changes): 3 entities, 256 bytes
+
+### WebSocket Connection Logging
+```
+✅ Added networking to player 1 entity with network ID 123 at (100.0, 200.0)
+WS Player 1 connected from 127.0.0.1:54321
+Entity 123: {"position": {"x": 100.5, "y": 200.3}}
 ```
 
----
+## Configuration
 
-## Key Benefits
+### Network Update Rate
+Systems run in `FixedUpdate` at 20Hz for consistent packet rate:
 
-### Before: Manual Registration Required
-- Adding 10 components required 10+ lines of manual registration
-- Easy to forget registrations, causing bugs
-- Separate queries needed for each component type
-- Central registry file needed constant updates
+```rust
+.add_systems(FixedUpdate, (/* network systems */))
+```
 
-### After: Auto-Registration
-- Adding 10 components requires 0 lines of registration
-- Components auto-register when declared
-- Single query handles all component types
-- Zero central registry maintenance
+### WebSocket Server
+- Host: `WEBSOCKET_HOST` environment variable (default: "0.0.0.0")
+- Port: `WEBSOCKET_PORT` environment variable (default: "5000")
 
-### Performance Benefits
-- **Compile-Time Registration**: No runtime overhead
-- **Single Query**: Efficient single-query approach
-- **Lazy Registration**: Components only register when used
-- **No Duplication**: Built-in duplicate prevention
+## Client Integration
 
----
+Clients connect via WebSocket and receive JSON messages:
 
-## Summary
+```javascript
+const ws = new WebSocket('ws://localhost:5000');
+ws.onmessage = (event) => {
+    const update = JSON.parse(event.data);
+    if (update.message_type === 'delta_update') {
+        // Apply entity updates to client game state
+    }
+};
+```
 
-**Before**: Adding 10 networked components required 10+ lines of manual registration in a central file.
+## Common Issues
 
-**After**: Adding 10 networked components requires 0 lines of registration - they register themselves automatically!
+### "Still Moving When Velocity is Zero"
+Ensure sync systems run before network change detection:
+```rust
+.after(sync_velocity_to_network_system)
+```
 
-The networking system is now at its most elegant state: **declare components and they automatically work across the network**. No manual registration, no boilerplate, no central registry maintenance! 🎉
+### "Could Not Find Player Entity"
+Ensure player spawn system runs before networking systems:
+```rust
+(player_spawn_system, add_networking_to_players_system).chain()
+```
+
+### High Bandwidth Usage
+Check that only necessary components implement `NetworkedComponent` and use appropriate change thresholds.
