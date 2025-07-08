@@ -1,9 +1,9 @@
 use bevy::prelude::*;
 use std::collections::HashMap;
 use rand::prelude::*;
-use crate::ecs::core::{Position, GameConfig};
+use crate::ecs::core::GameConfig;
+use crate::ecs::plugins::transform::Position;
 use crate::ecs::plugins::movement::components::{Velocity, DesiredVelocity, Friction};
-use crate::ecs::plugins::network::NetworkedObject;
 
 #[derive(Component, Debug, Clone, Copy)]
 pub struct Player {
@@ -44,7 +44,6 @@ pub struct PlayerBundle {
     pub health: Health,
     pub character_profile: CharacterProfile,
     pub friction: Friction,
-    pub networked_object: NetworkedObject,
 }
 
 impl PlayerBundle {
@@ -62,7 +61,6 @@ impl PlayerBundle {
             health: Health { current: profile.max_health, max: profile.max_health },
             character_profile: profile,
             friction: Friction::default(),
-            networked_object: NetworkedObject::new_player(player_id),
         }
     }
 }

@@ -6,8 +6,7 @@ Real-time networking systems for WebSocket client connections.
 These systems handle:
 - WebSocket server management and client connections
 - Input message processing with heartbeat monitoring
-- Smart client-aware synchronization
-- Automatic timeout detection and cleanup
+- Network message broadcasting to clients
 */
 
 use bevy::prelude::*;
@@ -25,17 +24,8 @@ use tokio::sync::Mutex;
 
 use crate::ecs::plugins::input::{InputCommand, InputCommandEvent};
 use crate::ecs::plugins::player::{PlayerSpawnEvent, PlayerDespawnEvent};
-use crate::ecs::plugins::network::components::*;
 use crate::ecs::plugins::network::ws::components::*;
-use crate::ecs::plugins::network::networked_state::*;
-use crate::ecs::plugins::network::NetworkedObject;
-use crate::ecs::plugins::network::component_registry::{
-    NetworkedComponentRegistry, build_full_sync_updates_registry, build_delta_updates_registry
-};
-
-// Network Configuration Constants
-/// How long since last sync to trigger a full sync (instead of delta) for reconnecting clients
-const RECONNECT_THRESHOLD_SECONDS: u64 = 3;
+use crate::ecs::plugins::network::NetworkUpdates;
 
 pub async fn ws_server_task(ws_send: Sender<WsEvent>) {
     let host = std::env::var("WEBSOCKET_HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
@@ -230,99 +220,52 @@ pub fn poll_ws_messages(
     }
 }
 
-pub fn batched_broadcast_system(
-    mut snapshot: ResMut<NetworkStateSnapshot>,
-    networked_query: Query<(Entity, &NetworkedObject)>,
-    registry: Res<NetworkedComponentRegistry>,
+/// System: Send network updates to WebSocket clients
+pub fn send_network_updates_to_clients_system(
+    mut network_updates: ResMut<NetworkUpdates>,
+    connected_clients: Res<ConnectedClients>,
     player_registry: Res<NetworkPlayerRegistry>,
-    mut connected_clients: ResMut<ConnectedClients>,
-    _ws_send: Res<WsSendChannel>,
-    world: &World,
 ) {
-    let reconnect_threshold = std::time::Duration::from_secs(RECONNECT_THRESHOLD_SECONDS);
-    
-    // Check if any clients need full sync
-    let has_clients_needing_full_sync = connected_clients.clients.iter()
-        .any(|(client_id, client_info)| {
-            player_registry.get_player_id(client_id).is_some() && 
-            client_info.needs_full_sync_after_reconnect(reconnect_threshold)
-        });
-    
-    // Build full sync data if needed using the registry approach
-    let full_sync_updates = if has_clients_needing_full_sync {
-        Some(build_full_sync_updates_registry(&networked_query, world, &*registry))
-    } else {
-        None
-    };
-    
-    // Build delta updates using the registry approach
-    let entity_updates = build_delta_updates_registry(&networked_query, world, &*registry, &mut snapshot);
-    
-    // Process each client individually
-    for (client_id, client_info) in connected_clients.clients.iter_mut() {
-        if let Some(player_id) = player_registry.get_player_id(client_id) {
-            let needs_full_sync = client_info.needs_full_sync_after_reconnect(reconnect_threshold);
-            
-            // Determine what to send
-            let message_params = if needs_full_sync {
-                full_sync_updates.as_ref().map(|data| (data.clone(), "full_sync", "reconnection"))
-            } else if !entity_updates.is_empty() {
-                Some((entity_updates.clone(), "delta_update", "changes"))
-            } else {
-                None
-            };
+    if network_updates.messages.is_empty() {
+        return;
+    }
 
-            // Send message if we have one
-            if let Some((updates, message_type, sync_reason)) = message_params {
-                send_network_message_to_client(
-                    client_id,
-                    player_id,
-                    message_type,
-                    updates,
-                    sync_reason,
-                );
-                client_info.update_sync();
+    for message in &network_updates.messages {
+        // println!("Broadcasting {} with {} entities to {} clients", 
+        //     message.message_type, 
+        //     message.entity_updates.len(),
+        //     connected_clients.clients.len()
+        // );
+        
+        // Convert to JSON
+        let json_message = serde_json::to_string(message).unwrap_or_else(|e| {
+            println!("Failed to serialize message: {}", e);
+            return "{}".to_string();
+        });
+        
+        // Send to all connected clients
+        for (client_id, _client_info) in &connected_clients.clients {
+            if let Some(_player_id) = player_registry.get_player_id(client_id) {
+                send_message_to_client(client_id, &json_message);
             }
         }
     }
+    
+    // Clear sent messages
+    network_updates.messages.clear();
 }
 
 
-/// Helper function to send network messages to clients (reduces code duplication)
-fn send_network_message_to_client(
-    client_id: &ClientId,
-    player_id: u32,
-    message_type: &str,
-    entity_updates: Vec<EntityUpdate>,
-    sync_reason: &str,
-) {
-    let message = NetworkMessage {
-        message_type: message_type.to_string(),
-        entity_updates: entity_updates.clone(),
-        my_player_id: player_id,
-    };
+/// Helper function to send a message to a specific client
+fn send_message_to_client(client_id: &ClientId, message: &str) {
+    let ClientId::WebSocket(addr) = client_id;
+    let message = message.to_string();
+    let client_addr = *addr;
     
-    let compact_msg = compress_message(&message);
-    let json_msg = serde_json::to_string(&compact_msg).unwrap();
-    
-    // Send the message via WebSocket
-    if let ClientId::WebSocket(addr) = client_id {
-        let message = json_msg.clone();
-        let client_addr = *addr;
-        
-        // Use Bevy's async task system to send the message
-        IoTaskPool::get().spawn(async move {
-            send_ws_message(client_addr, message).await;
-        }).detach();
-    }
-    
-    println!("{} sync to player {} ({}): {} entities, {} bytes", 
-        message_type,
-        player_id, 
-        sync_reason,
-        entity_updates.len(), 
-        json_msg.len()
-    );
+    // Use Bevy's async task system to send the message
+    IoTaskPool::get().spawn(async move {
+        send_ws_message(client_addr, message).await;
+    }).detach();
 }
 
 

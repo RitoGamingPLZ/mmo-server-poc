@@ -1,116 +1,94 @@
 use bevy::prelude::*;
+use serde::{Serialize, Deserialize};
 use std::collections::HashMap;
-use std::net::SocketAddr;
-use std::sync::atomic::{AtomicU32, Ordering};
 
-// Client identification - can be either u64 (UDP) or SocketAddr (WS)
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum ClientId {
-    Udp(u64),
-    WebSocket(SocketAddr),
+// ============================================================================
+// CORE NETWORKING COMPONENTS
+// ============================================================================
+
+/// Marks an entity as networked with a unique ID
+#[derive(Component)]
+pub struct NetworkId(pub u32);
+
+/// Generic snapshot storage for any networked component
+#[derive(Component, Default)]
+pub struct NetworkSnapshot {
+    pub components: HashMap<String, serde_json::Value>,
 }
 
-// Remove the to_player_id method - we'll generate player IDs uniformly
-
-#[derive(Debug, Clone)]
-pub struct ClientInfo {
-    pub id: ClientId,
-    pub connected_at: std::time::Instant,
-    pub last_sync: std::time::Instant,
-    pub requires_full_sync: bool,
+/// Tracks which components have changed since last sync
+#[derive(Component, Default)]
+pub struct NetworkDirty {
+    pub changed_components: Vec<String>,
 }
 
-impl ClientInfo {
-    pub fn new(id: ClientId) -> Self {
-        let now = std::time::Instant::now();
+// ============================================================================
+// TRAIT FOR NETWORKED COMPONENTS
+// ============================================================================
+
+/// Trait that networked components must implement
+pub trait NetworkedComponent: Component + Serialize + Clone + PartialEq {
+    fn component_name() -> &'static str;
+    
+    fn to_network_value(&self) -> serde_json::Value {
+        serde_json::to_value(self).unwrap()
+    }
+}
+
+// ============================================================================
+// RESOURCES
+// ============================================================================
+
+#[derive(Resource, Default)]
+pub struct NetworkIdAllocator {
+    next_id: u32,
+}
+
+impl NetworkIdAllocator {
+    pub fn allocate(&mut self) -> u32 {
+        self.next_id += 1;
+        self.next_id
+    }
+}
+
+#[derive(Resource, Default)]
+pub struct NetworkUpdates {
+    pub messages: Vec<NetworkMessage>,
+}
+
+// ============================================================================
+// NETWORK MESSAGE TYPES
+// ============================================================================
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct NetworkMessage {
+    pub message_type: String,
+    pub entity_updates: Vec<EntityUpdate>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct EntityUpdate {
+    pub network_id: u32,
+    pub components: HashMap<String, serde_json::Value>,
+}
+
+// ============================================================================
+// BUNDLE FOR EASY ENTITY SPAWNING
+// ============================================================================
+
+#[derive(Bundle)]
+pub struct NetworkedEntityBundle {
+    pub network_id: NetworkId,
+    pub snapshot: NetworkSnapshot,
+    pub dirty: NetworkDirty,
+}
+
+impl NetworkedEntityBundle {
+    pub fn new(network_id: u32) -> Self {
         Self {
-            id,
-            connected_at: now,
-            last_sync: now,
-            requires_full_sync: true, // New clients need full sync
+            network_id: NetworkId(network_id),
+            snapshot: NetworkSnapshot::default(),
+            dirty: NetworkDirty::default(),
         }
     }
-    
-    pub fn update_sync(&mut self) {
-        self.last_sync = std::time::Instant::now();
-        self.requires_full_sync = false;
-    }
-    
-    pub fn needs_full_sync_after_reconnect(&self, reconnect_threshold: std::time::Duration) -> bool {
-        self.requires_full_sync || self.last_sync.elapsed() > reconnect_threshold
-    }
-}
-
-// Unified events for both UDP and WS
-#[derive(Event)]
-pub struct ClientConnectedEvent {
-    pub client_id: ClientId,
-    pub player_id: u32,
-}
-
-#[derive(Event)]
-pub struct ClientDisconnectedEvent {
-    pub client_id: ClientId,
-    pub player_id: u32,
-    pub reason: String,
-}
-
-
-// Shared connected clients resource
-#[derive(Resource, Default)]
-pub struct ConnectedClients {
-    pub clients: HashMap<ClientId, ClientInfo>,
-}
-
-// Player registry for managing player IDs
-#[derive(Resource, Default)]
-pub struct NetworkPlayerRegistry {
-    pub client_to_player: HashMap<ClientId, u32>,
-    pub player_to_client: HashMap<u32, ClientId>,
-    pub player_metadata: HashMap<u32, PlayerMetadata>,
-}
-
-#[derive(Debug, Clone)]
-pub struct PlayerMetadata {
-    pub player_id: u32,
-    pub client_id: ClientId,
-    pub connected_at: std::time::Instant,
-}
-
-impl NetworkPlayerRegistry {
-    pub fn register_player(&mut self, client_id: ClientId, player_id: u32) {
-        let now = std::time::Instant::now();
-        
-        self.client_to_player.insert(client_id.clone(), player_id);
-        self.player_to_client.insert(player_id, client_id.clone());
-        self.player_metadata.insert(player_id, PlayerMetadata {
-            player_id,
-            client_id,
-            connected_at: now,
-        });
-    }
-    
-    pub fn unregister_player(&mut self, client_id: &ClientId) -> Option<u32> {
-        if let Some(player_id) = self.client_to_player.remove(client_id) {
-            self.player_to_client.remove(&player_id);
-            self.player_metadata.remove(&player_id);
-            Some(player_id)
-        } else {
-            None
-        }
-    }
-    
-    pub fn get_player_id(&self, client_id: &ClientId) -> Option<u32> {
-        self.client_to_player.get(client_id).copied()
-    }
-    
-    pub fn get_client_id(&self, player_id: u32) -> Option<&ClientId> {
-        self.player_to_client.get(&player_id)
-    }
-}
-
-static NEXT_PLAYER_ID: AtomicU32 = AtomicU32::new(1);
-
-pub fn generate_player_id() -> u32 {
-    NEXT_PLAYER_ID.fetch_add(1, Ordering::SeqCst)
 }

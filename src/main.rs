@@ -37,27 +37,19 @@ use bevy::prelude::*;
 
 mod ecs;
 
-use ecs::plugins::{CorePlugin, InputPlugin, MovementPlugin, PlayerPlugin, DebugPlugin, NetworkPlugin, NetworkMode};
+use ecs::plugins::{CorePlugin, InputPlugin, MovementPlugin, PlayerPlugin, DebugPlugin, NetworkPlugin, NetworkMode, TransformPlugin};
 
-// Export networking macros for use throughout the crate (used in component files)
-#[allow(unused_imports)]
-pub use ecs::plugins::network::auto_networked::*;
+// Core game modules
 /// Main entry point for the MMO game server.
 /// 
 /// Sets up the Bevy app with all necessary plugins and starts the game loop.
 /// The server will listen for client connections and begin processing game logic.
 fn main() {
-    // Choose networking protocol (WebSocket for web clients, UDP for native games)
-    let use_udp = false; // TODO: Make this configurable via CLI args or config file
-    
-    let network_mode = if use_udp {
-        NetworkMode::Udp
-    } else {
-        NetworkMode::Ws  // WebSocket - easier for web-based clients
-    };
+    // Using WebSocket networking
+    let network_mode = NetworkMode::Ws;
 
     println!("🚀 Starting MMO Game Server...");
-    println!("📡 Network Protocol: {}", if use_udp { "UDP" } else { "WebSocket" });
+    println!("📡 Network Protocol: WebSocket");
     
     App::new()
         // Bevy's minimal plugins (no graphics/audio needed for server)
@@ -65,10 +57,11 @@ fn main() {
         
         // Game plugins (order matters - core systems first, then features)
         .add_plugins(CorePlugin)                              // Basic components & resources
-        .add_plugins(NetworkPlugin { mode: network_mode })    // Client connections & sync
+        .add_plugins(TransformPlugin)                         // Position & transform systems
         .add_plugins(InputPlugin)                             // Handle player input
         .add_plugins(MovementPlugin)                          // Physics simulation 
         .add_plugins(PlayerPlugin)                            // Player management
+        .add_plugins(NetworkPlugin { mode: network_mode })    // Client connections & sync
         .add_plugins(DebugPlugin)                             // Development tools
         
         // Setup game world when server starts

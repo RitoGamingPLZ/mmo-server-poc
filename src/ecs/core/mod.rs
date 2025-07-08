@@ -1,5 +1,5 @@
 pub mod components;
 pub mod resources;
+pub mod plugin;
 
-pub use components::*;
 pub use resources::*;

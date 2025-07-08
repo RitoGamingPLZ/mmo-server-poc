@@ -52,6 +52,21 @@ pub fn input_processing_system(
     }
 }
 
+/// Resets desired velocity to zero for players who didn't receive input this frame.
+/// This allows friction to apply properly for momentum-based movement.
+pub fn reset_desired_velocity_system(
+    input_buffer: Res<InputBuffer>,
+    mut query: Query<(&Player, &mut DesiredVelocity)>,
+) {
+    for (player, mut desired_velocity) in query.iter_mut() {
+        // If no input was processed for this player this frame, reset desired velocity
+        if !input_buffer.commands.contains_key(&player.id) {
+            desired_velocity.x = 0.0;
+            desired_velocity.y = 0.0;
+        }
+    }
+}
+
 /// Validates input commands to detect potential cheating or invalid data.
 /// 
 /// This system checks incoming input for suspicious values that might indicate:

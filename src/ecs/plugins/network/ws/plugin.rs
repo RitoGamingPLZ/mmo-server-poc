@@ -1,9 +1,6 @@
 use bevy::prelude::*;
-use crate::ecs::plugins::network::components::*;
 use crate::ecs::plugins::network::ws::components::*;
 use crate::ecs::plugins::network::ws::systems::*;
-use crate::ecs::plugins::network::{NetworkStateSnapshot, NetworkIdAllocator};
-use crate::ecs::plugins::network::component_registry::NetworkedComponentRegistry;
 
 pub struct WsNetworkPlugin;
 
@@ -15,13 +12,10 @@ impl Plugin for WsNetworkPlugin {
             .insert_resource(WsRecvChannel(ws_recv))
             .init_resource::<ConnectedClients>()
             .init_resource::<NetworkPlayerRegistry>()
-            .init_resource::<NetworkStateSnapshot>()
-            .init_resource::<NetworkedComponentRegistry>()
-            .insert_resource(NetworkIdAllocator::new())
             .add_event::<ClientConnectedEvent>()
             .add_event::<ClientDisconnectedEvent>()
-            .add_systems(Update, poll_ws_messages)
-            .add_systems(FixedUpdate, batched_broadcast_system);
+            .add_systems(Update, poll_ws_messages);
+            // Network sending system moved to main NetworkPlugin chain
         
         // Networked components are auto-registered in their respective plugins:
         // - NetworkedPosition: auto-registered in NetworkPlugin 

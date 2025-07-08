@@ -1,5 +1,6 @@
 use bevy::prelude::*;
-use crate::{networked_component, impl_from_source};
+use serde::{Serialize, Deserialize};
+use crate::ecs::plugins::network::NetworkedComponent;
 
 #[derive(Component, Debug, Clone, Copy)]
 pub struct Velocity {
@@ -30,14 +31,12 @@ impl Default for Friction {
     }
 }
 
-// Networked versions of components with auto-sync
-networked_component! {
-    pub struct NetworkedVelocity {
-        #[threshold = 0.01]
-        pub x: f32,
-        #[threshold = 0.01]
-        pub y: f32,
-    }
+#[derive(Component, Clone, PartialEq, Serialize, Deserialize)]
+pub struct NetworkVelocity {
+    pub x: f32,
+    pub y: f32,
 }
 
-impl_from_source!(NetworkedVelocity, Velocity, {x, y});
+impl NetworkedComponent for NetworkVelocity {
+    fn component_name() -> &'static str { "velocity" }
+}

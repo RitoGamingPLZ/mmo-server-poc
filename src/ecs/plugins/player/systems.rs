@@ -11,7 +11,7 @@ pub fn player_spawn_system(
     for event in spawn_events.read() {
         let entity = commands.spawn(PlayerBundle::new(event.player_id, &game_config)).id();
         player_registry.register_player(event.player_id, entity);
-        println!("Spawned player entity for player ID: {}", event.player_id);
+        println!("Spawned player entity for player ID: {} -> Entity: {:?}", event.player_id, entity);
     }
 }
 

@@ -9,9 +9,6 @@ impl Plugin for PlayerPlugin {
         app.add_event::<PlayerSpawnEvent>()
             .add_event::<PlayerDespawnEvent>()
             .insert_resource(PlayerRegistry::default())
-            .add_systems(Update, (
-                player_spawn_system,
-                player_despawn_system,
-            ));
+            .add_systems(Update, player_despawn_system);
     }
 }

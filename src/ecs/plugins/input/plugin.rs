@@ -12,6 +12,7 @@ impl Plugin for InputPlugin {
                 input_validation_system,
                 input_event_system,
                 input_processing_system,
+                // reset_desired_velocity_system,
             ).chain());
     }
 }

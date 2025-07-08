@@ -11,7 +11,8 @@ These systems handle the core game physics:
 */
 
 use bevy::prelude::*;
-use crate::ecs::core::{Position, GameConfig};
+use crate::ecs::core::GameConfig;
+use crate::ecs::plugins::transform::Position;
 use crate::ecs::plugins::movement::components::*;
 use crate::ecs::plugins::player::components::CharacterProfile;
 
@@ -187,5 +188,15 @@ pub fn boundary_system(
             position.y = config.world_bounds.y;
             velocity.y = -velocity.y;  // Reflect vertically
         }
+    }
+}
+
+/// System: Sync Velocity to NetworkVelocity for networking
+pub fn sync_velocity_to_network_system(
+    mut query: Query<(&Velocity, &mut NetworkVelocity), Changed<Velocity>>,
+) {
+    for (velocity, mut network_vel) in query.iter_mut() {
+        network_vel.x = velocity.x;
+        network_vel.y = velocity.y;
     }
 }
