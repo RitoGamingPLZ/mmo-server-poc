@@ -5,6 +5,7 @@ import type { Player, EntityUpdate, ComponentUpdate, FieldUpdate } from './types
 export class PlayerManager {
   private players: Map<number, Player> = new Map();
   private myPlayerId: number | null = null;
+  private hasConnected: boolean = false;
 
   setMyPlayerId(playerId: number): void {
     this.myPlayerId = playerId;
@@ -21,6 +22,13 @@ export class PlayerManager {
   }
 
   clearPlayers(): void {
+    this.players.clear();
+    // Don't reset myPlayerId - it should persist across syncs
+  }
+
+  onConnected(): void {
+    this.hasConnected = true;
+    this.myPlayerId = null;
     this.players.clear();
   }
 
@@ -58,6 +66,7 @@ export class PlayerManager {
     let player = this.players.get(playerId);
     if (!player) {
       console.log(`✨ Creating new player ${playerId}`);
+      
       player = {
         id: playerId,
         serverPosition: { x: 0, y: 0 },
@@ -68,6 +77,10 @@ export class PlayerManager {
         isMyPlayer: playerId === this.myPlayerId
       };
       this.players.set(playerId, player);
+      
+      if (playerId === this.myPlayerId) {
+        console.log(`🎮 Created self player ${playerId}`);
+      }
     }
     
     // Process component updates from server format

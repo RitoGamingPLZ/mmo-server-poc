@@ -93,9 +93,9 @@ pub fn build_delta_updates_system(
     }
     
     if !entity_updates.is_empty() {
-        for update in &entity_updates {
-            println!("Entity {}: {:?}", update.network_id, update.components);
-        }
+        // for update in &entity_updates {
+        //     println!("Entity {}: {:?}", update.network_id, update.components);
+        // }
         network_updates.messages.push(NetworkMessage {
             message_type: "delta_update".to_string(),
             entity_updates,
@@ -129,7 +129,7 @@ pub fn build_full_sync_system(
     
     if !entity_updates.is_empty() {
         let num_entities = entity_updates.len();
-        println!("Building full sync for {} entities", num_entities);
+        // println!("Building full sync for {} entities", num_entities);
         network_updates.messages.push(NetworkMessage {
             message_type: "full_sync".to_string(),
             entity_updates,

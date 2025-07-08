@@ -36,6 +36,11 @@ export class GameClient {
       this.handleNetworkMessage(data);
     });
 
+    // Connection handling
+    this.networkManager.setConnectedHandler(() => {
+      this.playerManager.onConnected();
+    });
+
     // Input command handling
     this.inputHandler.setSendCommandCallback((command) => {
       if (this.networkManager.connected) {

@@ -78,10 +78,10 @@ pub fn acceleration_system(
             velocity.x += diff_x * change_factor;
             velocity.y += diff_y * change_factor;
             
-            if (velocity.x - old_velocity_x).abs() > 0.1 || (velocity.y - old_velocity_y).abs() > 0.1 {
-                println!("🏃 Acceleration: desired=({:.2}, {:.2}) current=({:.2}, {:.2}) change_factor={:.3}", 
-                    desired_velocity.x, desired_velocity.y, velocity.x, velocity.y, change_factor);
-            }
+            // if (velocity.x - old_velocity_x).abs() > 0.1 || (velocity.y - old_velocity_y).abs() > 0.1 {
+            //     println!("🏃 Acceleration: desired=({:.2}, {:.2}) current=({:.2}, {:.2}) change_factor={:.3}", 
+            //         desired_velocity.x, desired_velocity.y, velocity.x, velocity.y, change_factor);
+            // }
         } else {
             // Very small difference - just snap to the desired velocity
             velocity.x = desired_velocity.x;
@@ -203,8 +203,8 @@ pub fn sync_velocity_to_network_system(
     mut query: Query<(&Velocity, &mut NetworkVelocity), Changed<Velocity>>,
 ) {
     for (velocity, mut network_vel) in query.iter_mut() {
-        println!("Velocity sync: ({:.3}, {:.3}) -> ({:.3}, {:.3})", 
-            network_vel.x, network_vel.y, velocity.x, velocity.y);
+        // println!("Velocity sync: ({:.3}, {:.3}) -> ({:.3}, {:.3})", 
+        //     network_vel.x, network_vel.y, velocity.x, velocity.y);
         network_vel.x = velocity.x;
         network_vel.y = velocity.y;
     }

@@ -24,6 +24,9 @@ impl Plugin for DebugPlugin {
             // Add the debug timer resource (replaces unsafe static)
             .init_resource::<DebugTimer>()
             
+            // Add connection metrics tracking
+            .insert_resource(ConnectionMetrics::new())
+            
             // Add debug systems that run every frame
             .add_systems(Update, debug_system);
     }

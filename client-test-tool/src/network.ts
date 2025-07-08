@@ -14,6 +14,7 @@ export class NetworkManager {
   private isConnected = false;
   private connectionStatus: HTMLElement;
   private onMessageCallback?: (data: any) => void;
+  private onConnectedCallback?: () => void;
 
   constructor(connectionStatusElement: HTMLElement) {
     this.connectionStatus = connectionStatusElement;
@@ -30,6 +31,10 @@ export class NetworkManager {
         this.isConnected = true;
         this.connectionStatus.textContent = 'Connected';
         this.connectionStatus.className = 'connected';
+        
+        if (this.onConnectedCallback) {
+          this.onConnectedCallback();
+        }
       };
 
       this.ws.onclose = () => {
@@ -81,6 +86,10 @@ export class NetworkManager {
 
   setMessageHandler(callback: (data: any) => void): void {
     this.onMessageCallback = callback;
+  }
+
+  setConnectedHandler(callback: () => void): void {
+    this.onConnectedCallback = callback;
   }
 
   get connected(): boolean {

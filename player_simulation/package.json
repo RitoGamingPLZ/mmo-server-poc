@@ -1,0 +1,21 @@
+{
+  "name": "mmo-player-simulation",
+  "version": "1.0.0",
+  "description": "WebSocket client simulation for MMO game server testing",
+  "main": "player_simulation.js",
+  "scripts": {
+    "simulate": "node player_simulation.js",
+    "test": "node player_simulation.js --players 10 --interval 500"
+  },
+  "dependencies": {
+    "ws": "^8.14.2"
+  },
+  "keywords": [
+    "websocket",
+    "mmo",
+    "simulation",
+    "testing"
+  ],
+  "author": "",
+  "license": "MIT"
+}

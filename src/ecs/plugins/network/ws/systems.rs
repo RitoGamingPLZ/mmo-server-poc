@@ -33,7 +33,8 @@ pub async fn ws_server_task(ws_send: Sender<WsEvent>) {
     let addr = format!("{}:{}", host, port);
     
     let listener = TcpListener::bind(&addr).await.unwrap();
-    println!("WS server running on ws://{}", addr);
+    println!("WebSocket server started on ws://{}", addr);
+    println!("Connection metrics tracking enabled");
 
     // Shared map of client connections for sending messages
     let connections: Arc<Mutex<HashMap<SocketAddr, SplitSink<WebSocketStream<TcpStream>, Message>>>> = 
@@ -72,7 +73,7 @@ pub async fn ws_server_task(ws_send: Sender<WsEvent>) {
         
         tokio::spawn(async move {
             let ws_stream = accept_async(stream).await.unwrap();
-            println!("New WS client: {:?}", client_addr);
+            println!("New WebSocket client connected: {:?}", client_addr);
             
             let (sink, mut stream) = ws_stream.split();
             
@@ -95,7 +96,7 @@ pub async fn ws_server_task(ws_send: Sender<WsEvent>) {
             
             // Clean up connection
             connections.lock().await.remove(&client_addr);
-            println!("WS client disconnected: {:?}", client_addr);
+            println!("WebSocket client disconnected: {:?}", client_addr);
             let _ = ws_send.send(WsEvent::Disconnected(client_addr));
         });
     }
@@ -115,6 +116,7 @@ pub fn poll_ws_messages(
     recv: Res<WsRecvChannel>,
     mut connected_clients: ResMut<ConnectedClients>,
     mut player_registry: ResMut<NetworkPlayerRegistry>,
+    mut connection_metrics: ResMut<crate::ecs::plugins::debug::systems::ConnectionMetrics>,
     mut connect_events: EventWriter<ClientConnectedEvent>,
     mut disconnect_events: EventWriter<ClientDisconnectedEvent>,
     mut input_events: EventWriter<InputCommandEvent>,
@@ -137,6 +139,10 @@ pub fn poll_ws_messages(
                 // Register player
                 player_registry.register_player(client_id.clone(), player_id);
                 
+                // Update connection metrics
+                let current_connections = connected_clients.clients.len() as u32;
+                connection_metrics.record_connection(current_connections);
+                
                 // Send events
                 connect_events.send(ClientConnectedEvent { 
                     client_id: client_id.clone(), 
@@ -144,33 +150,50 @@ pub fn poll_ws_messages(
                 });
                 spawn_events.send(PlayerSpawnEvent { player_id });
                 
-                println!("WS Player {} connected from {:?}", player_id, addr);
+                println!("WS Player {} connected from {:?} (Total: {}, Peak: {})", 
+                    player_id, addr, current_connections, connection_metrics.peak_concurrent_connections);
             }
             WsEvent::Disconnected(addr) => {
                 let client_id = ClientId::WebSocket(addr);
                 
                 if let Some(player_id) = player_registry.unregister_player(&client_id) {
+                    // Get session duration before removing client
+                    let session_duration = connected_clients.clients.get(&client_id)
+                        .map(|info| info.connected_at.elapsed())
+                        .unwrap_or_default();
+                    
+                    // Remove from connected clients
                     connected_clients.clients.remove(&client_id);
                     
+                    // Update connection metrics
+                    connection_metrics.record_disconnection();
+                    let current_connections = connected_clients.clients.len() as u32;
+                    
+                    // Send disconnect event
                     disconnect_events.send(ClientDisconnectedEvent { 
                         client_id: client_id.clone(), 
                         player_id,
                         reason: "WebSocket disconnected".to_string(),
                     });
+                    
+                    // Send despawn event
                     despawn_events.send(PlayerDespawnEvent { player_id });
                     
-                    println!("WS Player {} disconnected from {:?}", player_id, addr);
+                    println!("WS Player {} disconnected from {:?} (Session: {}s, Remaining: {})", 
+                        player_id, addr, session_duration.as_secs(), current_connections);
+                } else {
+                    println!("Warning: Received disconnect for unknown client {:?}", addr);
                 }
             }
             WsEvent::TextMessage { client, text } => {
                 let client_id = ClientId::WebSocket(client);
                 
                 if let Some(player_id) = player_registry.get_player_id(&client_id) {
-                    println!("Input from WS player {}: {:?}", player_id, text);
+                    // println!("Input from WS player {}: {:?}", player_id, text);
                     // Try to parse as InputCommand
                     match serde_json::from_str::<InputCommand>(&text) {
                         Ok(command) => {
-                            println!("Command {:?}", command);
+                            // println!("Command {:?}", command);
                             input_events.send(InputCommandEvent {
                                 player_id,
                                 command,
@@ -260,13 +283,22 @@ pub fn send_network_updates_to_clients_system(
 pub fn send_full_sync_to_new_players_system(
     mut connect_events: EventReader<ClientConnectedEvent>,
     networked_query: Query<(&NetworkId, &NetworkSnapshot)>,
-    _player_registry: Res<NetworkPlayerRegistry>,
+    player_registry: Res<NetworkPlayerRegistry>,
+    main_player_registry: Res<crate::ecs::plugins::player::components::PlayerRegistry>,
 ) {
     for event in connect_events.read() {
-        println!("🔄 Sending full sync to new player {}", event.player_id);
+        println!("Sending full sync to new player {}", event.player_id);
         
         // Build full sync message for all existing entities
         let mut entity_updates = Vec::new();
+        let mut my_network_id = None;
+        
+        // Find the network_id of this player's entity
+        if let Some(player_entity) = main_player_registry.get_player_entity(event.player_id) {
+            if let Ok((network_id, _)) = networked_query.get(player_entity) {
+                my_network_id = Some(network_id.0);
+            }
+        }
         
         for (network_id, snapshot) in networked_query.iter() {
             if !snapshot.components.is_empty() {
@@ -277,22 +309,22 @@ pub fn send_full_sync_to_new_players_system(
             }
         }
         
-        if !entity_updates.is_empty() {
-            let full_sync_message = NetworkMessage {
-                message_type: "full_sync".to_string(),
-                entity_updates,
-            };
+        // Create full sync message with player's network_id
+        let full_sync_message = serde_json::json!({
+            "message_type": "full_sync",
+            "entity_updates": entity_updates,
+            "p": my_network_id.unwrap_or(event.player_id)
+        });
+        
+        let json_message = serde_json::to_string(&full_sync_message).unwrap_or_else(|e| {
+            println!("Failed to serialize full sync message: {}", e);
+            return "{}".to_string();
+        });
+        
+        println!("Sending full sync with {} entities to player {} (network_id: {:?})", 
+            entity_updates.len(), event.player_id, my_network_id);
             
-            let json_message = serde_json::to_string(&full_sync_message).unwrap_or_else(|e| {
-                println!("Failed to serialize full sync message: {}", e);
-                return "{}".to_string();
-            });
-            
-            println!("📤 Sending full sync with {} entities to player {}", 
-                full_sync_message.entity_updates.len(), event.player_id);
-                
-            send_message_to_client(&event.client_id, &json_message);
-        }
+        send_message_to_client(&event.client_id, &json_message);
     }
 }
 
@@ -305,7 +337,7 @@ pub fn notify_player_disconnect_system(
     networked_query: Query<&NetworkId, With<crate::ecs::plugins::player::Player>>,
 ) {
     for event in disconnect_events.read() {
-        println!("📤 Notifying all players that player {} disconnected", event.player_id);
+        println!("Notifying all players that player {} disconnected", event.player_id);
         
         // Find the network_id of the disconnected player's entity
         if let Some(player_entity) = main_player_registry.get_player_entity(event.player_id) {
@@ -318,23 +350,34 @@ pub fn notify_player_disconnect_system(
                     "reason": event.reason
                 });
                 
-                let json_message = serde_json::to_string(&disconnect_message).unwrap_or_else(|e| {
-                    println!("Failed to serialize disconnect message: {}", e);
-                    return "{}".to_string();
-                });
+                let json_message = match serde_json::to_string(&disconnect_message) {
+                    Ok(msg) => msg,
+                    Err(e) => {
+                        println!("Failed to serialize disconnect message for player {}: {}", event.player_id, e);
+                        continue; // Skip this disconnect notification
+                    }
+                };
+                
+                // Count clients to notify
+                let mut clients_notified = 0;
                 
                 // Send to all remaining connected clients
                 for (client_id, _client_info) in &connected_clients.clients {
                     if client_id != &event.client_id {  // Don't send to the disconnected client
                         if let Some(_remaining_player_id) = player_registry.get_player_id(client_id) {
                             send_message_to_client(client_id, &json_message);
+                            clients_notified += 1;
                         }
                     }
                 }
                 
-                println!("📤 Sent entity removal for network_id {} (player {}) to {} clients", 
-                    network_id.0, event.player_id, connected_clients.clients.len() - 1);
+                println!("Sent entity removal for network_id {} (player {}) to {} clients", 
+                    network_id.0, event.player_id, clients_notified);
+            } else {
+                println!("Warning: Could not find network_id for disconnected player {}", event.player_id);
             }
+        } else {
+            println!("Warning: Could not find entity for disconnected player {}", event.player_id);
         }
     }
 }
