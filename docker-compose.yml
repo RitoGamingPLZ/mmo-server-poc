@@ -28,24 +28,24 @@ services:
       start_period: 40s
 
   # Client (TypeScript/Vite)
-  client:
-    build:
-      context: ./client-test-tool
-      dockerfile: Dockerfile
-    ports:
-      - "5173:5173"
-    networks:
-      - mmo-network
-    depends_on:
-      - game-server
-    restart: unless-stopped
-    env_file:
-      - ./client-test-tool/.env.client
-    environment:
-      - VITE_WEBSOCKET_URL=${VITE_WEBSOCKET_URL:-ws://localhost:5000}
-    volumes:
-      - ./client-test-tool:/app
-      - /app/node_modules
+  # client:
+  #   build:
+  #     context: ./client-test-tool
+  #     dockerfile: Dockerfile
+  #   ports:
+  #     - "5173:5173"
+  #   networks:
+  #     - mmo-network
+  #   depends_on:
+  #     - game-server
+  #   restart: unless-stopped
+  #   env_file:
+  #     - ./client-test-tool/.env.client
+  #   environment:
+  #     - VITE_WEBSOCKET_URL=${VITE_WEBSOCKET_URL:-ws://localhost:5000}
+  #   volumes:
+  #     - ./client-test-tool:/app
+  #     - /app/node_modules
 
 networks:
   mmo-network:
