@@ -39,7 +39,7 @@ const WORLD_MIN_Y: f32 = 0.0;
 /// - Handles both keyboard and analog input gracefully
 pub fn acceleration_system(
     time: Res<Time>,
-    mut query: Query<(&mut Velocity, &DesiredVelocity, &CharacterProfile)>,
+    mut query: Query<(&mut Velocity, &DesiredVelocity, &CharacterProfile), Changed<DesiredVelocity>>,
 ) {
     let dt = time.delta_secs();
     
@@ -110,7 +110,7 @@ pub fn acceleration_system(
 /// - Coefficient of 0.95 means ~5% velocity loss per second at 60fps
 pub fn friction_system(
     time: Res<Time>,
-    mut query: Query<(&mut Velocity, &DesiredVelocity, &Friction)>,
+    mut query: Query<(&mut Velocity, &DesiredVelocity, &Friction), Changed<DesiredVelocity>>,
 ) {
     let dt = time.delta_secs();
     
@@ -147,7 +147,7 @@ pub fn friction_system(
 /// Simple physics integration: new_position = old_position + (velocity * time)
 pub fn movement_system(
     time: Res<Time>,
-    mut query: Query<(&mut Position, &Velocity)>,
+    mut query: Query<(&mut Position, &Velocity), Changed<Velocity>>,
 ) {
     let dt = time.delta_secs();
     
@@ -168,7 +168,7 @@ pub fn movement_system(
 /// - Reflects velocity (negates the component that hit the boundary)
 /// - Maintains speed but changes direction for realistic "bouncing"
 pub fn boundary_system(
-    mut query: Query<(&mut Position, &mut Velocity)>,
+    mut query: Query<(&mut Position, &mut Velocity), Changed<Position>>,
     config: Res<GameConfig>,
 ) {
     for (mut position, mut velocity) in query.iter_mut() {

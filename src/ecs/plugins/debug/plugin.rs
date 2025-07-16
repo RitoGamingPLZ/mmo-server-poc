@@ -28,6 +28,6 @@ impl Plugin for DebugPlugin {
             .insert_resource(ConnectionMetrics::new())
             
             // Add debug systems that run every frame
-            .add_systems(Update, debug_system);
+            // .add_systems(Update, debug_system);
     }
 }
