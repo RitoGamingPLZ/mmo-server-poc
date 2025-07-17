@@ -55,7 +55,7 @@ jobs:
       - name: Config SSH for Cloudflare Access
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secret.SSH_CONFIG }}"" >> ~/.ssh/config
+          echo "${{ secrets.SSH_CONFIG }}"" >> ~/.ssh/config
 
       - name: Add SSH Key
         run: |
