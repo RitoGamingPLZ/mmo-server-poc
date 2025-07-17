@@ -1,36 +1,80 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>MMO Game Client</title>
-  </head>
-  <body>
-    <div id="app">
-      <div id="game-container">
-        <div id="connection-status">Disconnected</div>
-        <canvas id="game-canvas" width="800" height="600"></canvas>
-        <div id="controls">
-          <div class="control-group">
-            <label>Movement:</label>
-            <div class="movement-controls">
-              <button id="btn-up">↑</button>
-              <div>
-                <button id="btn-left">←</button>
-                <button id="btn-stop">STOP</button>
-                <button id="btn-right">→</button>
-              </div>
-              <button id="btn-down">↓</button>
+<!DOCTYPE html>
+<html>
+<head>
+    <title>MMO Game Client Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 0; overflow: hidden; }
+        .main-container { display: flex; height: 100vh; }
+        .game-area { flex: 1; position: relative; display: flex; justify-content: center; align-items: center; background-color: #808080; }
+        .side-panel { width: 300px; background: #f5f5f5; padding: 15px; overflow-y: auto; border-left: 1px solid #ddd; }
+        .section { margin: 15px 0; padding: 10px; border: 1px solid #ddd; background: white; }
+        .controls { margin: 10px 0; }
+        button { margin: 5px; padding: 8px 12px; cursor: pointer; }
+        #log { height: 200px; overflow-y: scroll; border: 1px solid #ccc; padding: 8px; background: #f9f9f9; font-size: 11px; }
+        .log-entry { margin: 1px 0; }
+        .log-sent { color: blue; }
+        .log-received { color: green; }
+        .log-error { color: red; }
+        #gameCanvas { display: block; cursor: crosshair; background-color: #404040; }
+        .canvas-info { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.7); color: white; padding: 5px; border-radius: 3px; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        <div class="game-area">
+            <canvas id="gameCanvas"></canvas>
+            <div class="canvas-info">
+                <div>Click to move - Blue triangle = Your player</div>
+                <div>Green triangles = Other entities in view</div>
+                <div>Gray area = Outside view distance</div>
             </div>
-          </div>
-          <div class="control-group">
-            <button id="btn-connect">Connect</button>
-            <button id="btn-disconnect">Disconnect</button>
-          </div>
         </div>
-      </div>
+        
+        <div class="side-panel">
+            <h2>MMO Game Client Test</h2>
+            
+            <div class="section">
+                <h3>Connection</h3>
+                <div class="controls">
+                    <button id="connect">Connect</button>
+                    <button id="disconnect">Disconnect</button>
+                    <div>Status: <span id="status">Disconnected</span></div>
+                </div>
+            </div>
+            
+            <div class="section">
+                <h3>Controls</h3>
+                <div style="font-size: 12px; color: #666;">
+                    <div>Click on canvas to move</div>
+                    <div>Spacebar: Stop</div>
+                </div>
+                <div class="controls">
+                    <button id="stop">Stop</button>
+                </div>
+            </div>
+            
+            <div class="section">
+                <h3>Network Info</h3>
+                <div id="networkInfo" style="font-size: 12px;">
+                    <div><strong>View Radius:</strong> ~300 units</div>
+                    <div><strong>Update Type:</strong> Radius-based</div>
+                    <div><strong>Player ID Range:</strong> 1-9999</div>
+                    <div><strong>Network ID Range:</strong> 10000+</div>
+                    <div id="assignedIds" style="margin-top: 8px; color: #666;">
+                        <div>Player ID: <span id="playerIdDisplay">Not assigned</span></div>
+                        <div>Network ID: <span id="networkIdDisplay">Not assigned</span></div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="section">
+                <h3>Log</h3>
+                <div id="log"></div>
+                <button id="clear">Clear Log</button>
+            </div>
+        </div>
     </div>
-    <script type="module" src="/src/main.ts"></script>
-  </body>
+
+    <script type="module" src="src/main.js"></script>
+</body>
 </html>

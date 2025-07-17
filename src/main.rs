@@ -37,7 +37,9 @@ use bevy::prelude::*;
 
 mod ecs;
 
-use ecs::plugins::{CorePlugin, InputPlugin, MovementPlugin, PlayerPlugin, DebugPlugin, NetworkPlugin, NetworkMode, TransformPlugin};
+use ecs::components::*;
+use ecs::systems::*;
+use ecs::{WebSocketPlugin, NetworkPlugin};
 
 // Core game modules
 /// Main entry point for the MMO game server.
@@ -45,9 +47,6 @@ use ecs::plugins::{CorePlugin, InputPlugin, MovementPlugin, PlayerPlugin, DebugP
 /// Sets up the Bevy app with all necessary plugins and starts the game loop.
 /// The server will listen for client connections and begin processing game logic.
 fn main() {
-    // Using WebSocket networking
-    let network_mode = NetworkMode::Ws;
-
     println!("🚀 Starting MMO Game Server...");
     println!("📡 Network Protocol: WebSocket");
     
@@ -55,14 +54,43 @@ fn main() {
         // Bevy's minimal plugins (no graphics/audio needed for server)
         .add_plugins(MinimalPlugins)
         
-        // Game plugins (order matters - core systems first, then features)
-        .add_plugins(CorePlugin)                              // Basic components & resources
-        .add_plugins(TransformPlugin)                         // Position & transform systems
-        .add_plugins(InputPlugin)                             // Handle player input
-        .add_plugins(MovementPlugin)                          // Physics simulation 
-        .add_plugins(PlayerPlugin)                            // Player management
-        .add_plugins(NetworkPlugin { mode: network_mode })    // Client connections & sync
-        .add_plugins(DebugPlugin)                             // Development tools
+        // Add plugins
+        .add_plugins(NetworkPlugin)
+        .add_plugins(WebSocketPlugin::default())
+        
+        // Add resources
+        .insert_resource(GameConfig::default())
+        .insert_resource(PlayerRegistry::default())
+        .insert_resource(Time::<Fixed>::from_hz(10.0))
+        
+        // Add events
+        .add_event::<InputCommandEvent>()
+        .add_event::<PlayerSpawnEvent>()
+        .add_event::<PlayerDespawnEvent>()
+        .add_event::<CharacterSpawnEvent>()
+        .add_event::<CharacterDespawnEvent>()
+        
+        // Add systems
+        .add_systems(FixedUpdate, (
+            // Player management systems
+            player_spawn_system,
+            player_despawn_system,
+            
+            // Character management systems
+            character_spawn_system,
+            character_despawn_system,
+            
+            // Input systems
+            input_processing_system,
+            
+            // Movement systems
+            (
+                acceleration_friction_system,
+                movement_system,
+                boundary_system
+            ).chain()
+            
+        ))
         
         // Setup game world when server starts
         .add_systems(Startup, setup_game_world)
@@ -83,19 +111,3 @@ fn setup_game_world(_commands: Commands) {
     println!("📤 Input format: {{\"Move\": {{\"direction\": [1.0, 0.0]}}}}");
 }
 
-/// Helper function for testing - simulates player input.
-/// 
-/// This allows tests to inject input commands directly into the input buffer
-/// without going through the network layer.
-/// 
-/// # Arguments
-/// * `input_buffer` - The server's input command buffer
-/// * `player_id` - Which player is sending the command
-/// * `command` - The input command to process
-pub fn simulate_input(
-    input_buffer: &mut crate::ecs::plugins::input::InputBuffer, 
-    player_id: u32, 
-    command: crate::ecs::plugins::input::InputCommand
-) {
-    input_buffer.commands.insert(player_id, command);
-}

@@ -3,69 +3,21 @@ use serde::{Serialize, Deserialize};
 use std::collections::HashMap;
 
 // ============================================================================
-// CORE NETWORKING COMPONENTS
+// NETWORK COMPONENTS
 // ============================================================================
 
-/// Marks an entity as networked with a unique ID
 #[derive(Component)]
 pub struct NetworkId(pub u32);
 
-/// Generic snapshot storage for any networked component
 #[derive(Component, Default)]
 pub struct NetworkSnapshot {
     pub components: HashMap<String, serde_json::Value>,
 }
 
-/// Tracks which components have changed since last sync
 #[derive(Component, Default)]
 pub struct NetworkDirty {
     pub changed_components: Vec<String>,
 }
-
-// ============================================================================
-// REMOVED: NetworkedComponent trait - replaced with direct component monitoring
-// ============================================================================
-
-// ============================================================================
-// RESOURCES
-// ============================================================================
-
-#[derive(Resource, Default)]
-pub struct NetworkIdAllocator {
-    next_id: u32,
-}
-
-impl NetworkIdAllocator {
-    pub fn allocate(&mut self) -> u32 {
-        self.next_id += 1;
-        self.next_id
-    }
-}
-
-#[derive(Resource, Default)]
-pub struct NetworkUpdates {
-    pub messages: Vec<NetworkMessage>,
-}
-
-// ============================================================================
-// NETWORK MESSAGE TYPES
-// ============================================================================
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct NetworkMessage {
-    pub message_type: String,
-    pub entity_updates: Vec<EntityUpdate>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct EntityUpdate {
-    pub network_id: u32,
-    pub components: HashMap<String, serde_json::Value>,
-}
-
-// ============================================================================
-// BUNDLE FOR EASY ENTITY SPAWNING
-// ============================================================================
 
 #[derive(Bundle)]
 pub struct NetworkedEntityBundle {
@@ -83,3 +35,63 @@ impl NetworkedEntityBundle {
         }
     }
 }
+
+// ============================================================================
+// NETWORK RESOURCES
+// ============================================================================
+
+#[derive(Resource)]
+pub struct NetworkIdAllocator {
+    next_id: u32,
+}
+
+impl Default for NetworkIdAllocator {
+    fn default() -> Self {
+        Self {
+            next_id: 10000, // Start network IDs at 10000 to avoid overlap with player IDs
+        }
+    }
+}
+
+impl NetworkIdAllocator {
+    pub fn allocate(&mut self) -> u32 {
+        self.next_id += 1;
+        self.next_id
+    }
+}
+
+#[derive(Resource, Default)]
+pub struct NetworkUpdates {
+    pub messages: Vec<NetworkMessage>,
+    pub player_messages: HashMap<u32, Vec<NetworkMessage>>, // Per-player messages
+}
+
+// ============================================================================
+// NETWORK MESSAGE TYPES
+// ============================================================================
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct NetworkMessage {
+    #[serde(rename = "t")]
+    pub message_type: String,
+    #[serde(rename = "u")]
+    pub entity_updates: Vec<EntityUpdate>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct EntityUpdate {
+    #[serde(rename = "i")]
+    pub network_id: u32,
+    #[serde(rename = "c")]
+    pub components: HashMap<String, serde_json::Value>,
+}
+
+// Component name mappings for shorter keys
+pub const POSITION_KEY: &str = "p";
+pub const VELOCITY_KEY: &str = "v";
+pub const HEALTH_KEY: &str = "h";
+
+// Message type constants
+pub const DELTA_UPDATE_TYPE: &str = "d";
+pub const FULL_SYNC_TYPE: &str = "f";
+pub const WELCOME_TYPE: &str = "w";

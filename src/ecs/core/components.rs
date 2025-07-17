@@ -1,1 +1,0 @@
-// Position component moved to transform plugin

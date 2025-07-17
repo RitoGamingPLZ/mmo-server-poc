@@ -17,6 +17,8 @@ class PlayerSimulation {
         this.statsTimer = null;
         this.latencySum = 0;
         this.latencyCount = 0;
+        this.totalBytesSent = 0;
+        this.totalBytesReceived = 0;
     }
 
     log(message) {
@@ -29,11 +31,14 @@ class PlayerSimulation {
             id: playerId,
             socket: null,
             connected: false,
-            position: { x: 0, y: 0 },
+            position: { x: 500, y: 500 }, // Start in center
             lastPingTime: 0,
             latency: 0,
             messagesSent: 0,
-            messagesReceived: 0
+            messagesReceived: 0,
+            bytesSent: 0,
+            bytesReceived: 0,
+            lastMessageSize: 0
         };
 
         try {
@@ -47,6 +52,10 @@ class PlayerSimulation {
 
             player.socket.on('message', (data) => {
                 player.messagesReceived++;
+                const messageSize = Buffer.byteLength(data);
+                player.bytesReceived += messageSize;
+                player.lastMessageSize = messageSize;
+                this.totalBytesReceived += messageSize;
                 
                 try {
                     const message = JSON.parse(data.toString());
@@ -60,27 +69,29 @@ class PlayerSimulation {
                     }
 
                     // Handle different message types
-                    if (message.message_type === 'full_sync') {
+                    if (message.t === 'f') { // full_sync
                         // Full sync received
-                        if (message.entity_updates && message.entity_updates.length > 0) {
+                        if (message.u && message.u.length > 0) {
                             // Update player position from first entity (assuming it's this player)
-                            const firstEntity = message.entity_updates[0];
-                            if (firstEntity.components && firstEntity.components.Position) {
-                                player.position.x = firstEntity.components.Position.x;
-                                player.position.y = firstEntity.components.Position.y;
+                            const firstEntity = message.u[0];
+                            if (firstEntity.c && firstEntity.c.p) {
+                                player.position.x = firstEntity.c.p[0];
+                                player.position.y = firstEntity.c.p[1];
                             }
                         }
-                    } else if (message.message_type === 'delta_update') {
+                    } else if (message.t === 'd') { // delta_update
                         // Delta update received
-                        if (message.entity_updates) {
-                            message.entity_updates.forEach(entityUpdate => {
-                                if (entityUpdate.components && entityUpdate.components.Position) {
-                                    player.position.x = entityUpdate.components.Position.x;
-                                    player.position.y = entityUpdate.components.Position.y;
+                        if (message.u) {
+                            message.u.forEach(entityUpdate => {
+                                if (entityUpdate.c && entityUpdate.c.p) {
+                                    player.position.x = entityUpdate.c.p[0];
+                                    player.position.y = entityUpdate.c.p[1];
                                 }
                             });
                         }
-                    } else if (message.message_type === 'entity_removed') {
+                    } else if (message.t === 'w') { // welcome
+                        // Welcome message received
+                    } else if (message.t === 'entity_removed') {
                         // Another player disconnected
                     }
                 } catch (e) {
@@ -108,34 +119,36 @@ class PlayerSimulation {
     sendRandomMove(player) {
         if (!player.connected || !player.socket) return;
 
-        // Generate random direction vector
-        const angle = Math.random() * 2 * Math.PI;
-        const direction = [Math.cos(angle), Math.sin(angle)];
+        let command, messageStr;
         
-        const moveCommand = {
-            Move: {
-                direction: direction
-            }
-        };
+        // 30% chance to stop, 70% chance to move
+        if (Math.random() < 0.7) {
+            // Send stop command
+            command = "Stop";
+            messageStr = JSON.stringify(command);
+        } else {
+            // Generate random direction vector
+            const angle = Math.random() * 2 * Math.PI;
+            const direction = [Math.cos(angle), Math.sin(angle)];
+            
+            command = {
+                Move: {
+                    direction: direction
+                }
+            };
+            messageStr = JSON.stringify(command);
+        }
 
         try {
-            player.socket.send(JSON.stringify(moveCommand));
+            const messageSize = Buffer.byteLength(messageStr);
+            player.socket.send(messageStr);
             player.messagesSent++;
+            player.bytesSent += messageSize;
             this.totalMessages++;
+            this.totalBytesSent += messageSize;
             player.lastPingTime = performance.now();
-            
-            // Occasionally send stop command (10% chance)
-            if (Math.random() < 0.1) {
-                setTimeout(() => {
-                    if (player.connected && player.socket) {
-                        player.socket.send(JSON.stringify({ Stop: null }));
-                        player.messagesSent++;
-                        this.totalMessages++;
-                    }
-                }, 500);
-            }
         } catch (error) {
-            this.log(`Failed to send move command for player ${player.id}: ${error.message}`);
+            this.log(`Failed to send command for player ${player.id}: ${error.message}`);
         }
     }
 
@@ -143,14 +156,25 @@ class PlayerSimulation {
         const uptime = Math.round((performance.now() - this.startTime) / 1000);
         const avgLatency = this.latencyCount > 0 ? Math.round(this.latencySum / this.latencyCount) : 0;
         const totalMessagesReceived = this.players.reduce((sum, p) => sum + p.messagesReceived, 0);
+        const totalBytesSentByPlayers = this.players.reduce((sum, p) => sum + p.bytesSent, 0);
+        const totalBytesReceivedByPlayers = this.players.reduce((sum, p) => sum + p.bytesReceived, 0);
+        
+        const avgMessageSizeSent = this.totalMessages > 0 ? Math.round(this.totalBytesSent / this.totalMessages) : 0;
+        const avgMessageSizeReceived = totalMessagesReceived > 0 ? Math.round(this.totalBytesReceived / totalMessagesReceived) : 0;
         
         console.log('\n=== SIMULATION STATS ===');
         console.log(`Connected Players: ${this.connectedCount}/${this.players.length}`);
         console.log(`Messages Sent: ${this.totalMessages}`);
         console.log(`Messages Received: ${totalMessagesReceived}`);
+        console.log(`Bytes Sent: ${this.totalBytesSent} (${Math.round(this.totalBytesSent / 1024)}KB)`);
+        console.log(`Bytes Received: ${this.totalBytesReceived} (${Math.round(this.totalBytesReceived / 1024)}KB)`);
+        console.log(`Avg Message Size Sent: ${avgMessageSizeSent} bytes`);
+        console.log(`Avg Message Size Received: ${avgMessageSizeReceived} bytes`);
         console.log(`Average Latency: ${avgLatency}ms`);
         console.log(`Uptime: ${uptime}s`);
         console.log(`Messages/sec: ${Math.round(this.totalMessages / uptime)}`);
+        console.log(`Bandwidth In: ${Math.round(this.totalBytesReceived / uptime)} bytes/sec`);
+        console.log(`Bandwidth Out: ${Math.round(this.totalBytesSent / uptime)} bytes/sec`);
         console.log('========================\n');
     }
 
@@ -168,6 +192,8 @@ class PlayerSimulation {
         this.connectedCount = 0;
         this.latencySum = 0;
         this.latencyCount = 0;
+        this.totalBytesSent = 0;
+        this.totalBytesReceived = 0;
 
         this.log(`Starting simulation with ${playerCount} players`);
         this.log(`Server: ${this.serverUrl}`);
