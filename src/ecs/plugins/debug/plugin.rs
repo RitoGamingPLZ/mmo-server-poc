@@ -25,7 +25,7 @@ impl Plugin for DebugPlugin {
             .init_resource::<DebugTimer>()
             
             // Add connection metrics tracking
-            .insert_resource(ConnectionMetrics::new())
+            .insert_resource(ConnectionMetrics::new());
             
             // Add debug systems that run every frame
             // .add_systems(Update, debug_system);
