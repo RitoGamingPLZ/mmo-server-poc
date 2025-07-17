@@ -157,7 +157,7 @@ class GameRenderer {
                 const distance = dx + dy;
                 
                 // Only draw if within view distance (with same adjustment factor as server: 1.4)
-                if (distance <= viewDistance) {
+                if (distance <= viewDistance * this.scale) {
                     this.drawPlayer(player, {});
                 }
             }

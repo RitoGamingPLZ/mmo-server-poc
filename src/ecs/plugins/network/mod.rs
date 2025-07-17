@@ -13,11 +13,11 @@ impl Plugin for NetworkPlugin {
         app.insert_resource(NetworkIdAllocator::default())
             .insert_resource(NetworkUpdates::default())
             .add_systems(FixedUpdate, (
-                detect_velocity_changes_system,
-                detect_position_changes_system,
-                proximity_detection_system.before(build_delta_updates_system),
-                build_delta_updates_system,
-                build_full_sync_system.after(crate::ecs::systems::player_spawn_system),
+                detect_velocity_changes_system.after(crate::ecs::systems::acceleration_friction_system),
+                detect_position_changes_system.after(crate::ecs::systems::movement_system),
+                proximity_detection_system.after(detect_velocity_changes_system).after(detect_position_changes_system),
+                build_delta_updates_system.after(proximity_detection_system),
+                build_full_sync_system.after(crate::ecs::systems::player_spawn_system).after(proximity_detection_system),
             ));
     }
 }
