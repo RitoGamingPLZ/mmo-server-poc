@@ -1,8 +1,7 @@
 use bevy::prelude::*;
 use serde::{Serialize, Deserialize};
-use crate::ecs::plugins::network::NetworkedComponent;
 
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
 pub struct Velocity {
     pub x: f32,
     pub y: f32,
@@ -31,12 +30,3 @@ impl Default for Friction {
     }
 }
 
-#[derive(Component, Clone, PartialEq, Serialize, Deserialize)]
-pub struct NetworkVelocity {
-    pub x: f32,
-    pub y: f32,
-}
-
-impl NetworkedComponent for NetworkVelocity {
-    fn component_name() -> &'static str { "velocity" }
-}

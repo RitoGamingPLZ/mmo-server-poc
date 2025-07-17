@@ -1,8 +1,6 @@
 use bevy::prelude::*;
 use std::collections::HashMap;
 use crate::ecs::plugins::network::components::*;
-use crate::ecs::plugins::transform::NetworkPosition;
-use crate::ecs::plugins::movement::NetworkVelocity;
 use crate::ecs::plugins::player::{PlayerSpawnEvent, components::PlayerRegistry};
 
 /// System: Add networking components to existing player entities
@@ -19,11 +17,9 @@ pub fn add_networking_to_players_system(
         if let Some(player_entity) = player_registry.get_player_entity(event.player_id) {
             if let Ok(position) = position_query.get(player_entity) {
                 let network_id = allocator.allocate();
-                commands.entity(player_entity).insert((
+                commands.entity(player_entity).insert(
                     NetworkedEntityBundle::new(network_id),
-                    NetworkPosition { x: position.x, y: position.y },
-                    NetworkVelocity { x: 0.0, y: 0.0 },
-                ));
+                );
                 
                 println!("✅ Added networking to player {} entity with network ID {} at ({}, {})", 
                     event.player_id, network_id, position.x, position.y);
@@ -36,26 +32,38 @@ pub fn add_networking_to_players_system(
     }
 }
 
-/// System: Detect changes in any networked component and update snapshots
-pub fn detect_component_changes_system<T: NetworkedComponent>(
-    mut query: Query<(&mut NetworkDirty, &mut NetworkSnapshot, &T), With<NetworkId>>,
+/// System: Detect velocity changes and update snapshots
+pub fn detect_velocity_changes_system(
+    mut query: Query<(&mut NetworkDirty, &mut NetworkSnapshot, &crate::ecs::plugins::movement::components::Velocity), 
+                    (With<NetworkId>, Changed<crate::ecs::plugins::movement::components::Velocity>)>,
 ) {
-    let component_name = T::component_name();
-    
-    for (mut dirty, mut snapshot, component) in query.iter_mut() {
-        let current_value = component.to_network_value();
+    for (mut dirty, mut snapshot, velocity) in query.iter_mut() {
+        let current_value = serde_json::to_value(velocity).unwrap();
         
-        // Check if component changed
-        let changed = snapshot.components.get(component_name) != Some(&current_value);
+        // Update snapshot
+        snapshot.components.insert("velocity".to_string(), current_value);
         
-        if changed {
-            // Update snapshot
-            snapshot.components.insert(component_name.to_string(), current_value);
-            
-            // Mark as dirty if not already there
-            if !dirty.changed_components.contains(&component_name.to_string()) {
-                dirty.changed_components.push(component_name.to_string());
-            }
+        // Mark as dirty if not already there
+        if !dirty.changed_components.contains(&"velocity".to_string()) {
+            dirty.changed_components.push("velocity".to_string());
+        }
+    }
+}
+
+/// System: Detect position changes and update snapshots
+pub fn detect_position_changes_system(
+    mut query: Query<(&mut NetworkDirty, &mut NetworkSnapshot, &crate::ecs::plugins::transform::components::Position), 
+                    (With<NetworkId>, Changed<crate::ecs::plugins::transform::components::Position>)>,
+) {
+    for (mut dirty, mut snapshot, position) in query.iter_mut() {
+        let current_value = serde_json::to_value(position).unwrap();
+        
+        // Update snapshot
+        snapshot.components.insert("position".to_string(), current_value);
+        
+        // Mark as dirty if not already there
+        if !dirty.changed_components.contains(&"position".to_string()) {
+            dirty.changed_components.push("position".to_string());
         }
     }
 }

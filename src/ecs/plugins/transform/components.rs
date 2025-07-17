@@ -1,8 +1,7 @@
 use bevy::prelude::*;
 use serde::{Serialize, Deserialize};
-use crate::ecs::plugins::network::NetworkedComponent;
 
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
 pub struct Position {
     pub x: f32,
     pub y: f32,
@@ -12,8 +11,4 @@ pub struct Position {
 pub struct NetworkPosition {
     pub x: f32,
     pub y: f32,
-}
-
-impl NetworkedComponent for NetworkPosition {
-    fn component_name() -> &'static str { "position" }
 }

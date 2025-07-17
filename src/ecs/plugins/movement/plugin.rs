@@ -10,7 +10,6 @@ impl Plugin for MovementPlugin {
             acceleration_system,
             movement_system,
             boundary_system,
-            sync_velocity_to_network_system,
         ).chain());
     }
 }

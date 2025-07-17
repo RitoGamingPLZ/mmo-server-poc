@@ -23,17 +23,8 @@ pub struct NetworkDirty {
 }
 
 // ============================================================================
-// TRAIT FOR NETWORKED COMPONENTS
+// REMOVED: NetworkedComponent trait - replaced with direct component monitoring
 // ============================================================================
-
-/// Trait that networked components must implement
-pub trait NetworkedComponent: Component + Serialize + Clone + PartialEq {
-    fn component_name() -> &'static str;
-    
-    fn to_network_value(&self) -> serde_json::Value {
-        serde_json::to_value(self).unwrap()
-    }
-}
 
 // ============================================================================
 // RESOURCES
