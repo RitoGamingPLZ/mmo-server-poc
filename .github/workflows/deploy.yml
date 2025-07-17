@@ -70,4 +70,4 @@ jobs:
                  --namespace=mmo \
                  --install \
                  --set image.repository=${{ secrets.REGISTRY_USERNAME }}/mmo-game-server \
-                 --set image.tag=${{ github.sha }}"
+                 --set image.tag=${{ github.sha }}
