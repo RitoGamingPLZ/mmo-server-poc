@@ -48,7 +48,7 @@ pub struct Friction {
 
 impl Default for Friction {
     fn default() -> Self {
-        Self { coefficient: 0.95 }
+        Self { coefficient: 0.98 }
     }
 }
 

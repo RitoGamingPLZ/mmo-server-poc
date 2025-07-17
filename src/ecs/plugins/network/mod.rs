@@ -3,7 +3,7 @@ pub mod systems;
 
 use bevy::prelude::*;
 use components::{NetworkIdAllocator, NetworkUpdates};
-use systems::{detect_velocity_changes_system, detect_position_changes_system, build_delta_updates_system, build_full_sync_system};
+use systems::{detect_velocity_changes_system, detect_position_changes_system, proximity_detection_system, build_delta_updates_system, build_full_sync_system};
 
 // Network plugin for entity synchronization
 pub struct NetworkPlugin;
@@ -15,6 +15,7 @@ impl Plugin for NetworkPlugin {
             .add_systems(FixedUpdate, (
                 detect_velocity_changes_system,
                 detect_position_changes_system,
+                proximity_detection_system.before(build_delta_updates_system),
                 build_delta_updates_system,
                 build_full_sync_system.after(crate::ecs::systems::player_spawn_system),
             ));

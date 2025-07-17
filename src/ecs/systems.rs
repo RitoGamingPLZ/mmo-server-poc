@@ -42,13 +42,20 @@ const WORLD_MIN_Y: f32 = 0.0;
 
 pub fn acceleration_friction_system(
     time: Res<Time>,
-    mut query: Query<(&mut Velocity, &DesiredVelocity, &CharacterProfile, &Friction), Changed<DesiredVelocity>>,
+    mut query: Query<(&mut Velocity, &DesiredVelocity, &CharacterProfile, &Friction)>,
 ) {
     let dt = time.delta_secs();
     
     for (mut velocity, desired_velocity, profile, friction) in query.iter_mut() {
         let is_trying_to_move = desired_velocity.x.abs() > MIN_VELOCITY_THRESHOLD 
                              || desired_velocity.y.abs() > MIN_VELOCITY_THRESHOLD;
+        
+        let current_speed = velocity.x.abs() + velocity.y.abs();
+        
+        // Skip processing if already at zero velocity and not trying to move
+        if !is_trying_to_move && current_speed < MIN_VELOCITY_THRESHOLD {
+            continue;
+        }
         
         if is_trying_to_move {
             // Simple linear interpolation towards desired velocity
@@ -87,6 +94,11 @@ pub fn movement_system(
     let dt = time.delta_secs();
     
     for (mut position, velocity) in query.iter_mut() {
+        // Skip position updates if velocity is effectively zero
+        if velocity.x.abs() < MIN_VELOCITY_THRESHOLD && velocity.y.abs() < MIN_VELOCITY_THRESHOLD {
+            continue;
+        }
+        
         position.x += velocity.x * dt;
         position.y += velocity.y * dt;
     }

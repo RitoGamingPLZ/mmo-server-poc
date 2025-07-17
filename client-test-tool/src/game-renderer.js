@@ -103,7 +103,7 @@ class GameRenderer {
         this.ctx.fillStyle = fillColor;
         this.ctx.fill();
         this.ctx.strokeStyle = strokeColor;
-        this.ctx.lineWidth = 2;
+        this.ctx.lineWidth = 1;
         this.ctx.stroke();
 
         // Label for others
@@ -125,6 +125,11 @@ class GameRenderer {
         const otherPlayers = [];
 
         for (const player of entities.values()) {
+            // Skip players that aren't initialized
+            if (!player.initialized) {
+                continue;
+            }
+            
             if (player.self) selfPlayer = player;
             else otherPlayers.push(player);
         }
@@ -139,8 +144,27 @@ class GameRenderer {
             });
         }
 
-        // Draw other players
-        for (const player of otherPlayers) this.drawPlayer(player, {})
+        // Draw other players only if they're within view distance
+        if (selfPlayer) {
+            const selfPos = selfPlayer.state.position;
+            
+            for (const player of otherPlayers) {
+                const otherPos = player.state.position;
+                
+                // Calculate distance between self and other player (using Manhattan distance for consistency with server)
+                const dx = Math.abs(selfPos.x - otherPos.x);
+                const dy = Math.abs(selfPos.y - otherPos.y);
+                const distance = dx + dy;
+                
+                // Only draw if within view distance (with same adjustment factor as server: 1.4)
+                if (distance <= viewDistance) {
+                    this.drawPlayer(player, {});
+                }
+            }
+        } else {
+            // If no self player, draw all others (fallback)
+            for (const player of otherPlayers) this.drawPlayer(player, {});
+        }
     }
 
 }

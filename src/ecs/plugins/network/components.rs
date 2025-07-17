@@ -19,11 +19,17 @@ pub struct NetworkDirty {
     pub changed_components: Vec<String>,
 }
 
+#[derive(Component, Default)]
+pub struct ViewRangeTracker {
+    pub players_in_view: std::collections::HashSet<u32>,
+}
+
 #[derive(Bundle)]
 pub struct NetworkedEntityBundle {
     pub network_id: NetworkId,
     pub snapshot: NetworkSnapshot,
     pub dirty: NetworkDirty,
+    pub view_tracker: ViewRangeTracker,
 }
 
 impl NetworkedEntityBundle {
@@ -32,6 +38,7 @@ impl NetworkedEntityBundle {
             network_id: NetworkId(network_id),
             snapshot: NetworkSnapshot::default(),
             dirty: NetworkDirty::default(),
+            view_tracker: ViewRangeTracker::default(),
         }
     }
 }
@@ -89,7 +96,6 @@ pub struct EntityUpdate {
 // Component name mappings for shorter keys
 pub const POSITION_KEY: &str = "p";
 pub const VELOCITY_KEY: &str = "v";
-pub const HEALTH_KEY: &str = "h";
 
 // Message type constants
 pub const DELTA_UPDATE_TYPE: &str = "d";

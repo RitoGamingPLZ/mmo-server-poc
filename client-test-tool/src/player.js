@@ -5,6 +5,7 @@ class Player {
         this.id = null;
         this.networkId = null;
         this.self = self;
+        this.initialized = false; // Track if player has been initialized from server
         this.state = {
             position: { x: 0, y: 0 },
             velocity: { x: 0, y: 0 },
@@ -76,6 +77,7 @@ class Player {
             const result = WorldBounds.handleBoundaryCollision(st.position, st.velocity, worldBounds);
             st.position = result.position;
             st.velocity = result.velocity;
+            // st.desiredVelocity = result.velocity
         }
     }
 
@@ -83,6 +85,11 @@ class Player {
         if (this.state[field]) {
             this.state[field].x = x;
             this.state[field].y = y;
+            
+            // Mark player as initialized when position is set from server
+            if (field === 'position') {
+                this.initialized = true;
+            }
         } else {
             throw new Error(`Unknown state vector: ${field}`);
         }
@@ -101,6 +108,7 @@ class Player {
     reset() {
         this.id = null;
         this.networkId = null;
+        this.initialized = false;
         this.state.position = { x: 0, y: 0 };
         this.state.velocity = { x: 0, y: 0 };
         this.state.targetDirection = { x: 0, y: 0 };

@@ -12,11 +12,11 @@ export const GAME_CONSTANTS = {
     DEFAULT_WORLD_BOUNDS: { x: 1000, y: 1000 },
     
     // Player constants
-    DEFAULT_PLAYER_SIZE: 12,
-    OTHER_PLAYER_SIZE: 8,
+    DEFAULT_PLAYER_SIZE: 8,
+    OTHER_PLAYER_SIZE: 6,
     
     // Rendering constants
-    DEFAULT_VIEW_DISTANCE: 300,
+    DEFAULT_VIEW_DISTANCE: 150,
     DEFAULT_SCALE: 1,
     MAX_CANVAS_SIZE: 1000,
     

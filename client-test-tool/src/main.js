@@ -17,8 +17,12 @@ function loop(timestamp) {
     if (lastTimestamp === undefined) lastTimestamp = timestamp;
     const dt = (timestamp - lastTimestamp) / 1000; // seconds
 
-    // Tick only the self player for client prediction
-    for (const player of entities.values()) player.tick(dt, renderer.worldBounds);
+    // Tick only initialized players
+    for (const player of entities.values()) {
+        if (player.initialized) {
+            player.tick(dt, renderer.worldBounds);
+        }
+    }
 
     renderer.render(entities);
     lastTimestamp = timestamp;
@@ -63,43 +67,95 @@ document.getElementById('connect').addEventListener('click', () => {
         const data = JSON.parse(event.data);
         log(`Received: ${event.data}`, 'received');
 
-        // Welcome message: initialize local player
+        // Welcome message: setup identity only
         if (data.t === 'w') {
             if (data.u && data.u.length > 0) {
                 const welcomeData = data.u[0].c;
                 const networkId = welcomeData.network_id;
-                let player = entities.get(networkId);
-                if (!player) {
-                    player = new Player(true);
-                    entities.set(networkId, player);
-                }
-                player.setIds(welcomeData.player_id, networkId);
-                player.self = true;
-                player.setState("position", 500, 500); // or use server value
-                selfPlayer = player;
+                const playerId = welcomeData.player_id;
+                
+                // Store identity for later use in delta/full updates
+                selfPlayer = {
+                    id: playerId,
+                    networkId: networkId
+                };
 
-                log(`Assigned Player ID: ${player.id}`, 'info');
-                log(`Assigned Network ID: ${player.networkId}`, 'info');
+                log(`Assigned Player ID: ${playerId}`, 'info');
+                log(`Assigned Network ID: ${networkId}`, 'info');
                 log(`You will only receive updates for entities within ~${GAME_CONSTANTS.DEFAULT_VIEW_DISTANCE} units of your position`, 'info');
 
-                document.getElementById('playerIdDisplay').textContent = player.id;
-                document.getElementById('networkIdDisplay').textContent = player.networkId;
+                document.getElementById('playerIdDisplay').textContent = playerId;
+                document.getElementById('networkIdDisplay').textContent = networkId;
             }
         }
         // Uncomment and adapt this to support delta/full updates from your server:
         else if (data.t === 'd' || data.t === 'f') {
             data.u.forEach(update => {
                 let entity = entities.get(update.i);
+                const isSelf = update.i === selfPlayer?.networkId;
+                
                 if (!entity) {
-                    entity = new Player(update.i === selfPlayer?.networkId);
+                    entity = new Player(isSelf);
                     entities.set(update.i, entity);
+                    
+                    // Set up identity for self player when first seen in updates
+                    if (isSelf) {
+                        entity.setIds(selfPlayer.id, selfPlayer.networkId);
+                        entity.self = true;
+                        // Update the selfPlayer reference to the actual Player instance
+                        selfPlayer = entity;
+                    }
                 }
-                if (update.c.p) entity.setState('position', update.c.p[0], update.c.p[1]);
-                if (update.c.v) {
-                    entity.setState('velocity', update.c.v[0], update.c.v[1]);
-                    entity.setState('desiredVelocity', update.c.v[0], update.c.v[1]);
+                
+                if (isSelf) {
+                    // Client prediction reconciliation for self player
+                    if (update.c.p) {
+                        const serverPos = { x: update.c.p[0], y: update.c.p[1] };
+                        
+                        if (!entity.initialized) {
+                            // First position update: set directly without correction
+                            entity.setState('position', serverPos.x, serverPos.y);
+                            log(`Initial position set: [${serverPos.x}, ${serverPos.y}]`, 'info');
+                        } else {
+                            // Subsequent updates: apply correction logic
+                            const clientPos = entity.state.position;
+                            
+                            // Check if there's significant difference between client and server
+                            const positionError = Math.abs(serverPos.x - clientPos.x) + Math.abs(serverPos.y - clientPos.y);
+                            const ERROR_THRESHOLD = 2.0; // Allow small differences for smooth prediction
+                            
+                            if (positionError > ERROR_THRESHOLD) {
+                                // Server correction: blend toward server position
+                                const CORRECTION_FACTOR = 0.1; // Smooth correction over multiple frames
+                                entity.state.position.x += (serverPos.x - clientPos.x) * CORRECTION_FACTOR;
+                                entity.state.position.y += (serverPos.y - clientPos.y) * CORRECTION_FACTOR;
+                                log(`Position correction applied: error=${positionError.toFixed(2)}`, 'debug');
+                            }
+                        }
+                    }
+                    
+                    if (update.c.v) {
+                        // For velocity, be more aggressive in syncing since it affects future movement
+                        const serverVel = { x: update.c.v[0], y: update.c.v[1] };
+                        const clientVel = entity.state.velocity;
+                        
+                        const velocityError = Math.abs(serverVel.x - clientVel.x) + Math.abs(serverVel.y - clientVel.y);
+                        const VEL_ERROR_THRESHOLD = 5.0;
+                        
+                        if (velocityError > VEL_ERROR_THRESHOLD) {
+                            // Correct velocity more aggressively
+                            entity.setState('velocity', serverVel.x, serverVel.y);
+                            log(`Velocity correction applied: error=${velocityError.toFixed(2)}`, 'debug');
+                        }
+                    }
+                } else {
+                    // Other players: apply server state directly
+                    if (update.c.p) entity.setState('position', update.c.p[0], update.c.p[1]);
+                    if (update.c.v) {
+                        entity.setState('velocity', update.c.v[0], update.c.v[1]);
+                        entity.setState('desiredVelocity', update.c.v[0], update.c.v[1]);
+                    }
                 }
-                if (entity.networkId === selfPlayer?.networkId) entity.self = true;
             });
         }
     };
@@ -111,7 +167,7 @@ document.getElementById('connect').addEventListener('click', () => {
         document.getElementById('playerIdDisplay').textContent = 'Not assigned';
         document.getElementById('networkIdDisplay').textContent = 'Not assigned';
 
-        if (selfPlayer) selfPlayer.reset();
+        if (selfPlayer && selfPlayer.reset) selfPlayer.reset();
         selfPlayer = null;
         entities.clear();
     };
@@ -124,12 +180,12 @@ document.getElementById('connect').addEventListener('click', () => {
 // Disconnect button
 document.getElementById('disconnect').addEventListener('click', () => {
     if (ws) ws.close();
-    if (selfPlayer) selfPlayer.stop();
+    if (selfPlayer && selfPlayer.stop) selfPlayer.stop();
 });
 
 // Mouse click control: move self
 renderer.canvas.addEventListener('click', (e) => {
-    if (!selfPlayer) return;
+    if (!selfPlayer || !selfPlayer.state) return;
     const rect = renderer.canvas.getBoundingClientRect();
     const clickX = e.clientX - rect.left;
     const clickY = e.clientY - rect.top;
@@ -165,6 +221,7 @@ document.getElementById('clear').addEventListener('click', () => {
 document.addEventListener('keydown', (e) => {
     if (e.key === ' ') {
         sendCommand("Stop");
+        if (selfPlayer && selfPlayer.stop) selfPlayer.stop();
         e.preventDefault();
     }
 });

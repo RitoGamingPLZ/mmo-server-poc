@@ -1,7 +1,16 @@
 use bevy::prelude::*;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use crate::ecs::components::{Position, Velocity, Player, ViewDistance};
 use super::components::*;
+
+// ============================================================================
+// PRECISION UTILITIES
+// ============================================================================
+
+/// Rounds a float to 2 decimal places for network transmission
+fn round_to_2dp(value: f32) -> f32 {
+    (value * 100.0).round() / 100.0
+}
 
 // ============================================================================
 // NETWORK SYSTEMS
@@ -12,8 +21,8 @@ pub fn detect_velocity_changes_system(
                     (With<NetworkId>, Changed<Velocity>)>,
 ) {
     for (mut dirty, mut snapshot, velocity) in query.iter_mut() {
-        // Use compact format: [x, y] instead of {"x": x, "y": y}
-        let compact_velocity = vec![velocity.x, velocity.y];
+        // Use compact format: [x, y] instead of {"x": x, "y": y} with 2 decimal precision
+        let compact_velocity = vec![round_to_2dp(velocity.x), round_to_2dp(velocity.y)];
         let current_value = serde_json::to_value(compact_velocity).unwrap();
         snapshot.components.insert(super::components::VELOCITY_KEY.to_string(), current_value);
         
@@ -28,8 +37,8 @@ pub fn detect_position_changes_system(
                     (With<NetworkId>, Changed<Position>)>,
 ) {
     for (mut dirty, mut snapshot, position) in query.iter_mut() {
-        // Use compact format: [x, y] instead of {"x": x, "y": y}
-        let compact_position = vec![position.x, position.y];
+        // Use compact format: [x, y] instead of {"x": x, "y": y} with 2 decimal precision
+        let compact_position = vec![round_to_2dp(position.x), round_to_2dp(position.y)];
         let current_value = serde_json::to_value(compact_position).unwrap();
         snapshot.components.insert(super::components::POSITION_KEY.to_string(), current_value);
         
@@ -39,27 +48,70 @@ pub fn detect_position_changes_system(
     }
 }
 
-pub fn build_delta_updates_system(
+pub fn proximity_detection_system(
     mut network_updates: ResMut<NetworkUpdates>,
-    mut dirty_query: Query<(&NetworkId, &mut NetworkDirty, &NetworkSnapshot, &Position)>,
+    mut networked_query: Query<(&NetworkId, &NetworkSnapshot, &Position, &mut ViewRangeTracker)>,
     player_query: Query<(&Player, &Position, &ViewDistance)>,
 ) {
-    // Build updates for each player based on their view radius
+    // For each player, check what entities are in their view range
     for (player, player_pos, view_distance) in player_query.iter() {
-        let mut entity_updates = Vec::new();
+        let mut entities_in_view = HashSet::new();
         
-        for (network_id, mut dirty, snapshot, entity_pos) in dirty_query.iter_mut() {
-            if dirty.changed_components.is_empty() {
-                continue;
-            }
-            
-            // Calculate distance between player and entity (using fast approximation)
+        // Check all networked entities
+        for (network_id, _snapshot, entity_pos, _) in networked_query.iter() {
+            // Calculate distance between player and entity
             let dx = player_pos.x - entity_pos.x;
             let dy = player_pos.y - entity_pos.y;
             let distance_approx = dx.abs() + dy.abs(); // Manhattan distance
             
-            // Only include entities within view radius (adjust for Manhattan distance)
+            // Check if entity is within view radius
             if distance_approx <= view_distance.radius * 1.4 {
+                entities_in_view.insert(network_id.0);
+            }
+        }
+        
+        // For each networked entity, check if this player just entered their view
+        for (network_id, snapshot, _entity_pos, mut view_tracker) in networked_query.iter_mut() {
+            let was_in_view = view_tracker.players_in_view.contains(&player.id);
+            let is_in_view = entities_in_view.contains(&network_id.0);
+            
+            if is_in_view && !was_in_view {
+                // Player just entered view range - send full sync
+                if !snapshot.components.is_empty() {
+                    let message = NetworkMessage {
+                        message_type: super::components::FULL_SYNC_TYPE.to_string(),
+                        entity_updates: vec![EntityUpdate {
+                            network_id: network_id.0,
+                            components: snapshot.components.clone(),
+                        }],
+                    };
+                    network_updates.player_messages.entry(player.id).or_insert_with(Vec::new).push(message);
+                }
+                view_tracker.players_in_view.insert(player.id);
+            } else if !is_in_view && was_in_view {
+                // Player left view range
+                view_tracker.players_in_view.remove(&player.id);
+            }
+        }
+    }
+}
+
+pub fn build_delta_updates_system(
+    mut network_updates: ResMut<NetworkUpdates>,
+    mut dirty_query: Query<(&NetworkId, &mut NetworkDirty, &NetworkSnapshot, &Position, &ViewRangeTracker)>,
+    player_query: Query<(&Player, &Position, &ViewDistance)>,
+) {
+    // Build updates for each player based on their view radius
+    for (player, _player_pos, _view_distance) in player_query.iter() {
+        let mut entity_updates = Vec::new();
+        
+        for (network_id, mut dirty, snapshot, _entity_pos, view_tracker) in dirty_query.iter_mut() {
+            if dirty.changed_components.is_empty() {
+                continue;
+            }
+            
+            // Only send updates if player is in view range
+            if view_tracker.players_in_view.contains(&player.id) {
                 let mut components = HashMap::new();
                 
                 for component_name in &dirty.changed_components {
@@ -87,7 +139,7 @@ pub fn build_delta_updates_system(
     }
     
     // Clear dirty components after processing
-    for (_, mut dirty, _, _) in dirty_query.iter_mut() {
+    for (_, mut dirty, _, _, _) in dirty_query.iter_mut() {
         dirty.changed_components.clear();
     }
 }
