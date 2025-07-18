@@ -24,7 +24,7 @@ COPY src ./src
 
 # Build the application with optimizations
 ENV CARGO_TARGET_DIR=/app/target
-ENV RUSTFLAGS="-C target-cpu=native -C opt-level=3 -C lto=fat -C codegen-units=1 -C panic=abort"
+ENV RUSTFLAGS="-C target-cpu=native -C opt-level=3 -C codegen-units=1 -C panic=abort"
 RUN cargo build --release
 
 # Runtime stage - Use distroless for security and size
