@@ -59,13 +59,14 @@ pub fn proximity_detection_system(
         
         // Check all networked entities
         for (network_id, _snapshot, entity_pos, _) in networked_query.iter() {
-            // Calculate distance between player and entity
+            // Calculate distance between player and entity (optimized for ARM)
             let dx = player_pos.x - entity_pos.x;
             let dy = player_pos.y - entity_pos.y;
-            let distance_approx = dx.abs() + dy.abs(); // Manhattan distance
+            let distance_squared = dx * dx + dy * dy; // Faster on ARM than abs()
+            let view_radius_squared = view_distance.radius * view_distance.radius * 1.96; // 1.4^2
             
-            // Check if entity is within view radius
-            if distance_approx <= view_distance.radius * 1.4 {
+            // Check if entity is within view radius using squared distance
+            if distance_squared <= view_radius_squared {
                 entities_in_view.insert(network_id.0);
             }
         }
@@ -168,13 +169,14 @@ pub fn build_full_sync_system(
             // Send full state of entities within view radius
             for (network_id, snapshot, entity_pos) in networked_query.iter() {
                 if !snapshot.components.is_empty() {
-                    // Calculate distance between joining player and entity
+                    // Calculate distance between joining player and entity (ARM optimized)
                     let dx = player_pos.x - entity_pos.x;
                     let dy = player_pos.y - entity_pos.y;
-                    let distance_approx = dx.abs() + dy.abs(); // Manhattan distance
+                    let distance_squared = dx * dx + dy * dy; // Faster than abs() on ARM
+                    let view_radius_squared = view_distance.radius * view_distance.radius * 1.96; // 1.4^2
                     
-                    // Only include entities within view radius
-                    if distance_approx <= view_distance.radius * 1.4 {
+                    // Only include entities within view radius using squared distance
+                    if distance_squared <= view_radius_squared {
                         entity_updates.push(EntityUpdate {
                             network_id: network_id.0,
                             components: snapshot.components.clone(),

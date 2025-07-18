@@ -13,14 +13,8 @@ RUN apt-get update && apt-get install -y \
 # Create empty project for dependency caching
 RUN cargo init --name mmo_game_server
 
-# Copy manifest files first for better caching
-COPY Cargo.toml Cargo.lock ./
-
-# Build dependencies (cached layer)
-RUN cargo build --release && rm src/*.rs target/release/deps/mmo_game_server*
-
-# Copy source code
-COPY src ./src
+# Copy the full project (Cargo.toml, Cargo.lock, src/, etc.)
+COPY . .
 
 # Build the application with optimizations
 ENV CARGO_TARGET_DIR=/app/target
