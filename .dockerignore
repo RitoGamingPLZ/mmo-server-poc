@@ -1,9 +1,41 @@
+# Rust build artifacts
 target/
-client-test-tool/node_modules/
-client-test-tool/dist/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Git
 .git/
 .gitignore
+
+# Documentation
 README.md
+docs/
+
+# Client test tool
+client-test-tool/
+
+# Docker files
+Dockerfile*
+.dockerignore
 docker-compose.yml
-Dockerfile
+
+# Logs
 *.log
+
+# Temporary files
+*.tmp
+*.temp
+
+# Environment files
+.env*
+
+# Examples
+examples/

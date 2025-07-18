@@ -53,7 +53,7 @@ function sendCommand(command) {
 document.getElementById('connect').addEventListener('click', () => {
     if (ws) ws.close();
 
-    ws = new WebSocket('ws://localhost:5000');
+    ws = new WebSocket(import.meta.env.VITE_WEBSOCKET_URL || 'http://ws.localhost:5000');
 
     ws.onopen = () => {
         statusEl.textContent = 'Connected';
