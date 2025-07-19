@@ -23,55 +23,39 @@ pub fn setup_websocket_server(
     
     // Spawn a dedicated thread for the WebSocket server
     thread::spawn(move || {
-        let rt = tokio::runtime::Runtime::new().unwrap();
+        let rt = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(2) // Use # of CPU cores (Pi 4 = 4, Pi 5 = 4/8)
+            .enable_all()
+            .build()
+            .unwrap();
         rt.block_on(async move {
             let listener = TcpListener::bind(format!("0.0.0.0:{}", port)).await.unwrap();
             println!("🌐 WebSocket server listening on ws://localhost:{}", port);
             
-            // Spawn task to handle outgoing network messages (global)
+            // Global message handler
             let connections_for_sender = connections_clone.clone();
             tokio::spawn(async move {
-                loop {
-                    // Use try_recv to avoid blocking the async runtime
-                    match network_receiver.try_recv() {
-                        Ok(network_msg) => {
-                            let json_msg = serde_json::to_string(&network_msg).unwrap_or_default();
-                            let ws_message = Message::Text(json_msg.into());
-                            
-                            // Send to all connected clients
-                            let conns = connections_for_sender.lock().await;
-                            for (_, sender) in conns.iter() {
-                                let _ = sender.send(ws_message.clone());
-                            }
-                        }
-                        Err(_) => {
-                            // No messages available, sleep briefly to avoid busy waiting
-                            tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-                        }
+                while let Some(network_msg) = network_receiver.recv().await {
+                    let json_msg = serde_json::to_string(&network_msg).unwrap_or_default();
+                    let ws_message = Message::Text(json_msg.into());
+
+                    let conns = connections_for_sender.lock().await;
+                    for (_, sender) in conns.iter() {
+                        let _ = sender.send(ws_message.clone());
                     }
                 }
             });
-            
-            // Spawn task to handle player-specific network messages
+
+            // Player-specific message handler
             let connections_for_player_sender = connections_clone.clone();
             tokio::spawn(async move {
-                loop {
-                    // Use try_recv to avoid blocking the async runtime
-                    match player_network_receiver.try_recv() {
-                        Ok((player_id, network_msg)) => {
-                            let json_msg = serde_json::to_string(&network_msg).unwrap_or_default();
-                            let ws_message = Message::Text(json_msg.into());
-                            
-                            // Send to specific player
-                            let conns = connections_for_player_sender.lock().await;
-                            if let Some(sender) = conns.get(&player_id) {
-                                let _ = sender.send(ws_message);
-                            }
-                        }
-                        Err(_) => {
-                            // No messages available, sleep briefly to avoid busy waiting
-                            tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-                        }
+                while let Some((player_id, network_msg)) = player_network_receiver.recv().await {
+                    let json_msg = serde_json::to_string(&network_msg).unwrap_or_default();
+                    let ws_message = Message::Text(json_msg.into());
+
+                    let conns = connections_for_player_sender.lock().await;
+                    if let Some(sender) = conns.get(&player_id) {
+                        let _ = sender.send(ws_message);
                     }
                 }
             });

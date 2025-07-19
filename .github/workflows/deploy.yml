@@ -68,6 +68,4 @@ jobs:
           ssh -o StrictHostKeyChecking=no ${{ secrets.K3S_USER }}@ssh.alanchiu.net \
                helm upgrade mmo-game rito/game-server \
                  --namespace=mmo \
-                 --install \
-                 --set image.repository=${{ secrets.REGISTRY_USERNAME }}/mmo-game-server \
-                 --set image.tag=${{ github.sha }}
+                 --install
