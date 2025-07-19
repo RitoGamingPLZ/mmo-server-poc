@@ -32,30 +32,50 @@ pub fn setup_websocket_server(
             let listener = TcpListener::bind(format!("0.0.0.0:{}", port)).await.unwrap();
             println!("🌐 WebSocket server listening on ws://localhost:{}", port);
             
-            // Global message handler
+            // Spawn task to handle outgoing network messages (global)
             let connections_for_sender = connections_clone.clone();
             tokio::spawn(async move {
-                while let Some(network_msg) = network_receiver.recv().await {
-                    let json_msg = serde_json::to_string(&network_msg).unwrap_or_default();
-                    let ws_message = Message::Text(json_msg.into());
-
-                    let conns = connections_for_sender.lock().await;
-                    for (_, sender) in conns.iter() {
-                        let _ = sender.send(ws_message.clone());
+                loop {
+                    // Use try_recv to avoid blocking the async runtime
+                    match network_receiver.try_recv() {
+                        Ok(network_msg) => {
+                            let json_msg = serde_json::to_string(&network_msg).unwrap_or_default();
+                            let ws_message = Message::Text(json_msg.into());
+                            
+                            // Send to all connected clients
+                            let conns = connections_for_sender.lock().await;
+                            for (_, sender) in conns.iter() {
+                                let _ = sender.send(ws_message.clone());
+                            }
+                        }
+                        Err(_) => {
+                            // No messages available, sleep briefly to avoid busy waiting
+                            tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+                        }
                     }
                 }
             });
-
-            // Player-specific message handler
+            
+            // Spawn task to handle player-specific network messages
             let connections_for_player_sender = connections_clone.clone();
             tokio::spawn(async move {
-                while let Some((player_id, network_msg)) = player_network_receiver.recv().await {
-                    let json_msg = serde_json::to_string(&network_msg).unwrap_or_default();
-                    let ws_message = Message::Text(json_msg.into());
-
-                    let conns = connections_for_player_sender.lock().await;
-                    if let Some(sender) = conns.get(&player_id) {
-                        let _ = sender.send(ws_message);
+                loop {
+                    // Use try_recv to avoid blocking the async runtime
+                    match player_network_receiver.try_recv() {
+                        Ok((player_id, network_msg)) => {
+                            let json_msg = serde_json::to_string(&network_msg).unwrap_or_default();
+                            let ws_message = Message::Text(json_msg.into());
+                            
+                            // Send to specific player
+                            let conns = connections_for_player_sender.lock().await;
+                            if let Some(sender) = conns.get(&player_id) {
+                                let _ = sender.send(ws_message);
+                            }
+                        }
+                        Err(_) => {
+                            // No messages available, sleep briefly to avoid busy waiting
+                            tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+                        }
                     }
                 }
             });
